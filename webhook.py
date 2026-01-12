@@ -24,10 +24,33 @@ DEFAULT_IMAGE = "https://i.ibb.co/xKGpF5sQ/469991854-122136396014386621-38322669
 
 # RSS Feeds for Sports & Health Content
 RSS_FEEDS = [
-    "https://www.skysewsports.com/rss",  # General Sports
-    "https://feeds.feedburner.com/AceFitFacts", # Fitness Facts
-    "https://www.youm7.com/rss/SectionRss?SectionID=298", # اليوم السابع رياضة
-    # يمكن إضافة المزيد لاحقاً
+    # Karate
+    "https://feeds.feedburner.com/karatemart",
+    "https://kaizenfitnessusa.com/blog?format=rss",
+    "https://karateoc.com/feed",
+    
+    # Kung Fu
+    "https://kungfu.kids/blog/feed", # Assuming standard WP feed structure if not provided
+    "https://smabloggers.com/tag/kung-fu/feed", 
+    
+    # Kickboxing
+    "https://sidekickboxing.co.uk/blog/feed/",
+    "https://www.ufcgym.com.au/fitness-blog/rss", # Checking common RSS patterns or using the provided URL if it works with feedparser
+    
+    # Gymnastics
+    "https://shiftmovementscience.com/feed/",
+    "https://usagym.org/feed/", 
+    "https://mountain-kids.com/feed/",
+    
+    # Taekwondo
+    "https://taekwondonation.com/feed/",
+    "https://illinoistkd.com/feed/",
+    "http://usnta.net/category/blog/feed/",
+    
+    # General & Local
+    "https://www.skysewsports.com/rss",
+    "https://feeds.feedburner.com/AceFitFacts",
+    "https://www.youm7.com/rss/SectionRss?SectionID=298",
 ]
 
 # Academy Data

@@ -794,9 +794,19 @@ with tab2:
             )
             
         st.markdown("### 📰 مصادر الأخبار (RSS)")
+        default_rss = """https://feeds.feedburner.com/karatemart
+https://kaizenfitnessusa.com/blog?format=rss
+https://karateoc.com/feed
+https://kungfu.kids/blog/feed
+https://sidekickboxing.co.uk/blog/feed/
+https://shiftmovementscience.com/feed/
+https://taekwondonation.com/feed/
+https://www.skysewsports.com/rss
+https://www.youm7.com/rss/SectionRss?SectionID=298"""
+        
         new_rss_feeds_text = st.text_area(
             "روابط RSS (رابط في كل سطر)",
-            value="https://www.skysewsports.com/rss\nhttps://www.youm7.com/rss/SectionRss?SectionID=298\nhttps://feeds.feedburner.com/AceFitFacts",
+            value=default_rss,
             key="cfg_rss"
         )
         

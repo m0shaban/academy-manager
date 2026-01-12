@@ -547,15 +547,23 @@ def update_config():
 def gen_vouchers():
     """Generate voucher codes with special admin authorization sequence"""
     data = request.get_json() or {}
-    
+
     # Special admin code verification sequence
     step1 = data.get("step1")
-    step2 = data.get("step2") 
+    step2 = data.get("step2")
     step3 = data.get("step3")
-    
+
     if step1 != "بلح" or step2 != "طرح" or step3 != "موز":
-        return jsonify({"status": "error", "message": "كود المدير غير صحيح - تأكد من الخطوات الثلاث"}), 401
-    
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": "كود المدير غير صحيح - تأكد من الخطوات الثلاث",
+                }
+            ),
+            401,
+        )
+
     count = int(data.get("count", 20))
     duration = int(data.get("duration_days", 30))
 

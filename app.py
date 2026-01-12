@@ -569,14 +569,14 @@ st.markdown("""
 
 # --- Navigation Tabs ---
 tab1, tab2, tab3, tab4 = st.tabs([
-    "✨ مولد المحتوى + صور",
-    "💬 بوت الردود", 
-    "⚙️ الإعدادات",
+    "✨ مولد المحتوى",
+    "🤖 غرفة عمليات الكابتن (أتمتة)", 
+    "💬 بوت الردود",
     "📊 نظرة عامة"
 ])
 
 # ========================================
-# TAB 1: Content Generator with Images
+# TAB 1: Content Generator
 # ========================================
 with tab1:
     st.markdown("## ✨ مولد المحتوى الذكي مع الصور")
@@ -742,9 +742,115 @@ with tab1:
                             st.error(err_msg)
 
 # ========================================
-# TAB 2: Chat Bot
+# TAB 2: Captain Ezz Simulation & Automation
 # ========================================
 with tab2:
+    st.markdown("## 🤖 غرفة عمليات كابتن عز (نظام الأتمتة)")
+    st.info("هنا يمكنك التحكم في 'عقل' البوت، وتجربة ما سينشره تلقائياً قبل حدوثه.")
+
+    # --- Configuration Section ---
+    with st.expander("⚙️ إعدادات الشخصية والجدولة", expanded=False):
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("### ⏰ مواعيد النشر النشطة")
+            active_hours = st.multiselect(
+                "الساعات (بتوقيت مصر)",
+                options=list(range(24)),
+                default=[9, 11, 14, 17, 20, 22],
+                format_func=lambda x: f"{x}:00"
+            )
+        
+        with col2:
+            st.markdown("### 🎭 إعدادات الشخصية")
+            captain_mood = st.select_slider(
+                "مود الكابتن",
+                options=["رسمي جداً", "متوازن", "حماسي جداً"],
+                value="حماسي جداً"
+            )
+            
+        st.markdown("### 📰 مصادر الأخبار (RSS)")
+        rss_feeds = st.text_area(
+            "روابط RSS (رابط في كل سطر)",
+            value="https://www.skysewsports.com/rss\nhttps://www.youm7.com/rss/SectionRss?SectionID=298\nhttps://feeds.feedburner.com/AceFitFacts"
+        )
+        
+        if st.button("💾 حفظ الإعدادات"):
+            st.success("تم تحديث إعدادات الكابتن (محاكاة)")
+
+    st.divider()
+
+    # --- Simulation Section ---
+    st.markdown("### 🧪 اختبار المحتوى التلقائي")
+    st.markdown("اضغط الزر لمحاكاة ما سيفعله البوت **لو كان الوقت الآن هو:**")
+    
+    sim_hour = st.slider("اختر ساعة للمحاكاة", 0, 23, 10, format="%d:00")
+    
+    if st.button("🔄 محاكاة دورة النشر (Test Run)", type="primary"):
+        st.markdown("---")
+        
+        # 1. Determine Logic based on time
+        post_type = "general"
+        if 8 <= sim_hour < 11:
+            post_type = "🌞 صباحي (تحفيز)"
+        elif 11 <= sim_hour < 14:
+            post_type = "🍎 صحة وتغذية"
+        elif 14 <= sim_hour < 17:
+            post_type = "👶 أطفال ونصائح"
+        elif 17 <= sim_hour < 20:
+            post_type = "🥋 تمرين وفنيات"
+        elif 20 <= sim_hour <= 23:
+            post_type = "🌙 عروض وليل"
+        else:
+            post_type = "😴 وقت النوم (لن يتم نشر شيء)"
+
+        col_res1, col_res2 = st.columns([1, 2])
+        
+        with col_res1:
+            st.markdown(f"**⏰ الساعة:** `{sim_hour}:00`")
+            st.markdown(f"**🎯 نوع المنشور:** `{post_type}`")
+            
+            if "النوم" in post_type:
+                st.warning("💤 الكابتن نايم دلوقتي. السيستم مش هينشر حاجة.")
+            else:
+                st.success("✅ السيستم نشط وهينشر.")
+
+        with col_res2:
+            if "النوم" not in post_type and groq_key:
+                with st.spinner("جاري استدعاء كابتن عز لكتابة المنشور..."):
+                    # Simulation Logic
+                    default_img = "https://i.ibb.co/xKGpF5sQ/469991854-122136396014386621-3832266993418146234-n.jpg"
+                    
+                    # Try getting RSS Mock
+                    has_rss = random.choice([True, False])
+                    rss_data = None
+                    if has_rss:
+                        rss_data = {
+                            "title": "فوائد مذهلة لممارسة الرياضة صباحاً",
+                            "link": "http://example.com/sport-news",
+                            "image": default_img
+                        }
+                    
+                    # Generate Prompt
+                    sim_prompt = f"اكتب بوست فيسبوك عن {post_type}"
+                    if rss_data:
+                        sim_prompt += f" مستوحي من خبر بعنوان: {rss_data['title']}"
+                    
+                    client, model = get_ai_client("Groq", groq_key)
+                    mock_response = generate_ai_response(client, model, COACH_SYSTEM_PROMPT, sim_prompt, data)
+                    
+                    st.markdown("### 📝 المنشور المتوقع:")
+                    st.markdown(f'<div class="generated-post">{mock_response}</div>', unsafe_allow_html=True)
+                    
+                    st.markdown("### 🖼️ الصورة المختارة:")
+                    st.image(default_img, caption="الصورة الافتراضية (أو صورة الخبر)", width=300)
+                    
+                    if fb_token:
+                        st.button("📢 اعتمد وانشر ده فعلاً", key="force_pub_sim")
+
+# ========================================
+# TAB 3: Chat Bot (Support)
+# ========================================
+with tab3:
     st.markdown("## 💬 بوت كابتن عز - محاكي الردود")
     
     data = load_academy_data()

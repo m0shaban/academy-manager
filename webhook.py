@@ -19,10 +19,14 @@ CRON_SECRET = "my_secret_cron_key_123" # حماية للرابط عشان محد
 # Initialize Groq
 client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
+# الثوابت والصور
+DEFAULT_IMAGE = "https://i.ibb.co/xKGpF5sQ/469991854-122136396014386621-3832266993418146234-n.jpg"
+
 # RSS Feeds for Sports & Health Content
 RSS_FEEDS = [
     "https://www.skysewsports.com/rss",  # General Sports
     "https://feeds.feedburner.com/AceFitFacts", # Fitness Facts
+    "https://www.youm7.com/rss/SectionRss?SectionID=298", # اليوم السابع رياضة
     # يمكن إضافة المزيد لاحقاً
 ]
 
@@ -133,7 +137,7 @@ def fetch_content_idea():
         pass
         
     # لو فشل ال RSS، ارجع لإنشاء محتوى أصلي
-    return {"type": "original", "category": post_type, "image_url": None}
+    return {"type": "original", "category": post_type, "image_url": DEFAULT_IMAGE}
 
 def generate_social_post(idea):
     """Generate the post text using Groq"""

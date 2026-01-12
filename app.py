@@ -383,7 +383,7 @@ def upload_to_imgbb(image_base64, api_key):
 
 # --- Page Configuration ---
 st.set_page_config(
-    page_title="أكاديمية أبطال أكتوبر",
+    page_title="أكاديمية أبطال أكتوبر v3.1",
     page_icon="🥋",
     layout="wide",
     initial_sidebar_state="expanded"

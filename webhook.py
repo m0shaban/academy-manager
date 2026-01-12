@@ -2,6 +2,11 @@ from flask import Flask, request, jsonify
 import os
 from groq import Groq
 import requests
+import feedparser
+from bs4 import BeautifulSoup
+import random
+from datetime import datetime
+import pytz
 
 app = Flask(__name__)
 
@@ -9,9 +14,17 @@ app = Flask(__name__)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY_4")
 PAGE_ACCESS_TOKEN = os.environ.get("PAGE_ACCESS_TOKEN")
 VERIFY_TOKEN = "academy_webhook_2026"
+CRON_SECRET = "my_secret_cron_key_123" # حماية للرابط عشان محدش غيرك يشغله
 
 # Initialize Groq
 client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+
+# RSS Feeds for Sports & Health Content
+RSS_FEEDS = [
+    "https://www.skysewsports.com/rss",  # General Sports
+    "https://feeds.feedburner.com/AceFitFacts", # Fitness Facts
+    # يمكن إضافة المزيد لاحقاً
+]
 
 # Academy Data
 ACADEMY_DATA = {
@@ -45,33 +58,151 @@ ACADEMY_DATA = {
     ]
 }
 
-SYSTEM_PROMPT = """أنت "كابتن عز غريب" - مدير ومدرب أكاديمية أبطال أكتوبر للفنون القتالية والجمباز.
+SYSTEM_PROMPT = """أنت "كابتن عز غريب"، صانع محتوى رياضي ومدرب خبير، ومدير "أكاديمية أبطال أكتوبر".
 
-شخصيتك:
-🥋 مدرب محترف وخبير في الرياضات القتالية
-💪 حماسي ومشجع، تحب تحفز الناس
-😊 ودود ومرحب، بتتعامل مع الآباء باحترام
-🎯 محترف ودقيق في المعلومات
+شخصيتك وأسلوبك:
+1.  **صانع محتوى حقيقي:** لا تتحدث كأنك روبوت خدمة عملاء. تكلم كأنك "إنفلونسر" رياضي فاهم ومجرب.
+2.  **اللغة:** عامية مصرية راقية ومحفزة (يا بطل، يا وحش، عاش، استمر).
+3.  **الهدف:** تقديم قيمة حقيقية (نصائح، تحفيز، معلومات) وبناء ثقة، ثم التسويق للأكاديمية بشكل ذكي وغير مباشر أحياناً، ومباشر أحياناً أخرى.
+4.  **المحتوى:**
+    *   نصائح تغذية وتمرين حقيقية وعلمية.
+    *   تجارب عملية من الصالة (التمرين بيعلم الصبر، شفت النهاردة ولد صغير بيعمل...).
+    *   تحفيز قوي للالتزام.
+    *   معلومات عن رياضات الأكاديمية (الجمباز بيقوي الأعصاب، الكاراتيه مش بس ضرب...).
 
-أسلوبك في الكلام:
-- تتحدث بالعربية المصرية العامية
-- تستخدم إيموجي بشكل معتدل ومناسب
-- تبدأ الرد بتحية ودودة
-- تختم بدعوة للتواصل أو التسجيل
-- تذكر العروض الحالية عند المناسبة
+لا تستخدم جمل تقليدية مثل "يسعدنا انضمامك". قل بدلاً منها: "مستني إيه؟ مكانك موجود في فريق الأبطال!".
+"""
 
-مهمتك:
-1. الرد على استفسارات الآباء والمهتمين
-2. تشجيع التسجيل في الأكاديمية
-3. إبراز فوائد الرياضة للأطفال
-4. تقديم معلومات دقيقة عن المواعيد والأسعار
-5. الترويج للعروض الحالية
+def get_cairo_time():
+    """Get current time in Cairo"""
+    cairo_tz = pytz.timezone('Africa/Cairo')
+    return datetime.now(cairo_tz)
 
-ملاحظات مهمة:
-- دائماً اذكر رقم التواصل عند السؤال عن التسجيل
-- شجع على زيارة الأكاديمية للتجربة
-- أكد على أهمية الرياضة في بناء شخصية الطفل
-- اذكر أن التدريب مناسب لجميع الأعمار من 4 سنوات"""
+def extract_image_from_url(url):
+    """Attempt to extract the main image from a webpage/article"""
+    try:
+        response = requests.get(url, timeout=10)
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Try og:image
+        og_image = soup.find("meta", property="og:image")
+        if og_image and og_image.get("content"):
+            return og_image["content"]
+            
+        # Try twitter:image
+        twitter_image = soup.find("meta", name="twitter:image")
+        if twitter_image and twitter_image.get("content"):
+            return twitter_image["content"]
+            
+        return None
+    except:
+        return None
+
+def fetch_content_idea():
+    """Fetch an idea from RSS or generate a topic based on time of day"""
+    current_hour = get_cairo_time().hour
+    
+    # تحديد نوع المنشور حسب الوقت
+    post_type = "general"
+    if 8 <= current_hour < 11:
+        post_type = "motivation_morning" # صباح وتفاؤل
+    elif 11 <= current_hour < 14:
+        post_type = "health_tip" # نصيحة في وسط اليوم
+    elif 14 <= current_hour < 17:
+        post_type = "kids_advice" # نصيحة للأمهات والأطفال بعد المدرسة
+    elif 17 <= current_hour < 20:
+        post_type = "training_drill" # وقت التمرين
+    elif 20 <= current_hour <= 23:
+        post_type = "academy_offer" # عرض مباشر للحجز
+    
+    # تفضيل احضار محتوى خارجي للتعليق عليه (Curated Content)
+    try:
+        if random.choice([True, False]): # 50% فرصة لجلب محتوى خارجي
+            feed = feedparser.parse(random.choice(RSS_FEEDS))
+            if feed.entries:
+                entry = random.choice(feed.entries[:5])
+                image_url = extract_image_from_url(entry.link)
+                return {
+                    "type": "curated",
+                    "title": entry.title,
+                    "link": entry.link,
+                    "summary": entry.get('summary', ''),
+                    "image_url": image_url
+                }
+    except:
+        pass
+        
+    # لو فشل ال RSS، ارجع لإنشاء محتوى أصلي
+    return {"type": "original", "category": post_type, "image_url": None}
+
+def generate_social_post(idea):
+    """Generate the post text using Groq"""
+    
+    if idea['type'] == 'curated':
+        prompt = f"""
+        أنت كابتن عز غريب. لقيت المقال ده عن الرياضة:
+        العنوان: {idea['title']}
+        الملخص: {idea['summary']}
+        
+        اكتب بوست فيسبوك تعلق فيه على الموضوع ده من وجهة نظرك كمدرب.
+        1. ابدأ بجملة تشد الانتباه (Hook).
+        2. لخص الفكرة المهمة باختصار وبالعامية المصرية.
+        3. ضيف نصيحة إضافية من عندك "تكة الكابتن".
+        4. (اختياري) لو مناسب، اربط الموضوع برياضة موجودة في الأكاديمية عندنا.
+        5. لا تذكر الرابط، فقط علق على المحتوى.
+        """
+    else:
+        topics = {
+            "motivation_morning": "بوست صباحي تحفيزي عن النشاط والبداية القوية.",
+            "health_tip": "نصيحة تغذية أو شرب مياه أو نوم للرياضيين.",
+            "kids_advice": "نصيحة لأولياء الأمور عن التعامل مع طاقة الأطفال وتوجيهها للرياضة.",
+            "training_drill": "معلومة فنية بسيطة عن الكاراتيه أو الجمباز أو الكونفو.",
+            "academy_offer": "بوست دعائي مباشر بس بأسلوب 'خايف على مصلحتك'.. الحق مكانك في عروض السنة الجديدة."
+        }
+        topic_desc = topics.get(idea['category'], "نصيحة رياضية عامة")
+        
+        prompt = f"""
+        أنت كابتن عز غريب.
+        اكتب بوست فيسبوك عن: {topic_desc}
+        
+        الأسلوب:
+        - عامية مصرية، فيها روح وتشجيع.
+        - استخدم إيموجي مناسبة 🥊🥋💪.
+        - خلي الكلام مقسم فقرات قصيرة (سهل القراءة).
+        - اختم بـ Call to Action (سؤال للمتابعين، أو دعوة للتمرين).
+        """
+        
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT + f"\nبيانات الأكاديمية: {ACADEMY_DATA}"},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=800,
+            temperature=0.8
+        )
+        return response.choices[0].message.content
+    except:
+        return None
+
+def publish_to_facebook(message, image_url=None):
+    """Publish content to Facebook Page"""
+    if not PAGE_ACCESS_TOKEN:
+        return "No Page Access Token Configured"
+        
+    url = f"https://graph.facebook.com/v18.0/me/feed"
+    params = {"access_token": PAGE_ACCESS_TOKEN}
+    data = {"message": message}
+    
+    if image_url:
+        data["link"] = image_url
+    
+    try:
+        requests.post(url, params=params, json=data, timeout=30)
+        return "Published Successfully"
+    except Exception as e:
+        return f"Error publishing: {e}"
 
 def generate_response(message):
     """Generate AI response using Groq"""
@@ -165,6 +296,38 @@ def home():
         "service": "Academy Manager Webhook",
         "version": "1.0"
     })
+
+@app.route('/auto-post-trigger', methods=['GET', 'POST'])
+def auto_scheduler():
+    """
+    هذا الرابط يتم استدعاؤه بواسطة خدمة Cron Job خارجية
+    للنشر التلقائي في المواعيد المحددة
+    """
+    # 1. Security Check
+    secret = request.args.get('secret')
+    if secret != CRON_SECRET:
+        return "Unauthorized", 401
+    
+    # 2. Time Check (Cairo 8 AM - 12 AM)
+    cairo_now = get_cairo_time()
+    if not (8 <= cairo_now.hour <= 23):
+        return f"Sleeping time in Cairo (Hour: {cairo_now.hour}). No posts.", 200
+        
+    # 3. Generate Content
+    idea = fetch_content_idea()
+    post_text = generate_social_post(idea)
+    
+    if post_text:
+        # 4. Publish
+        result = publish_to_facebook(post_text, idea.get('image_url'))
+        return jsonify({
+            "status": "success",
+            "time": str(cairo_now),
+            "type": idea.get('type'),
+            "result": result
+        })
+    
+    return "Failed to generate content", 500
 
 @app.route('/webhook', methods=['GET'])
 def verify_webhook():

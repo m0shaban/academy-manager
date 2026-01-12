@@ -47,11 +47,37 @@ try:
     GROQ_API_KEY = st.secrets.get("GROQ_API_KEY_4", "")
     NVIDIA_API_KEY = st.secrets.get("NVIDIA_API_KEY", "")
     IMGBB_API_KEY = st.secrets.get("IMGBB_API_KEY", "")
+    PAGE_ACCESS_TOKEN = st.secrets.get("PAGE_ACCESS_TOKEN", "")
 except FileNotFoundError:
     st.error("ملف secrets.toml غير موجود. يرجى إعداد أسرار Streamlit.")
     GROQ_API_KEY = ""
     NVIDIA_API_KEY = ""
     IMGBB_API_KEY = ""
+    PAGE_ACCESS_TOKEN = ""
+
+def post_to_facebook_page(message, access_token, image_url=None):
+    """Post content to Facebook Page Feed."""
+    if not access_token:
+        return None, "❌ لم يتم العثور على Page Access Token"
+        
+    url = f"https://graph.facebook.com/v18.0/me/feed"
+    params = {"access_token": access_token}
+    
+    data = {"message": message}
+    if image_url:
+        data["link"] = image_url
+        # If posting an image, sometimes 'url' parameter is better for photos endpoint, 
+        # but 'link' works for feed posts.
+        # For photos endpoint (better for engagement):
+        url = f"https://graph.facebook.com/v18.0/me/photos"
+        data = {"url": image_url, "caption": message}
+    
+    try:
+        response = requests.post(url, params=params, json=data, timeout=30)
+        response.raise_for_status()
+        return response.json(), None
+    except Exception as e:
+        return None, f"❌ خطأ في النشر على فيسبوك: {str(e)}"
 
 # --- Content Scenarios ---
 CONTENT_SCENARIOS = {
@@ -499,8 +525,9 @@ with st.sidebar:
     groq_key = GROQ_API_KEY or st.text_input("Groq API Key", type="password", key="groq_input")
     nvidia_key = NVIDIA_API_KEY or st.text_input("NVIDIA API Key", type="password", key="nvidia_input")
     imgbb_key = IMGBB_API_KEY or st.text_input("ImgBB API Key", type="password", key="imgbb_input")
+    fb_token = PAGE_ACCESS_TOKEN or st.text_input("FB Page Token", type="password", key="fb_input")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         if groq_key:
             st.success("✅ Groq")
@@ -516,6 +543,11 @@ with st.sidebar:
             st.success("✅ ImgBB")
         else:
             st.warning("⚠️ ImgBB")
+    with col4:
+        if fb_token:
+            st.success("✅ FB")
+        else:
+            st.warning("⚠️ FB")
     
     st.divider()
     
@@ -697,37 +729,67 @@ with tab1:
             progress.progress(100)
             status.success("✅ تم!")
             
-            # Display Results
-            st.markdown("---")
-            st.markdown("### 📝 المنشور الجاهز:")
-            st.markdown(f'<div class="generated-post">{post_text}</div>', unsafe_allow_html=True)
-            
-            # Text copy area
-            st.text_area("📋 انسخ النص:", post_text, height=150)
-            
-            # Show images if available
-            if 'rss_images' in st.session_state and st.session_state.rss_images:
-                st.markdown("### 🖼️ اختر صورة من المصادر:")
-                img_cols = st.columns(min(3, len(st.session_state.rss_images)))
-                for i, img in enumerate(st.session_state.rss_images[:3]):
-                    with img_cols[i]:
-                        try:
-                            st.image(img['url'], caption=img.get('source', ''), use_container_width=True)
-                            st.markdown(f"<span class='image-source-tag'>{img.get('source', 'مصدر')}</span>", unsafe_allow_html=True)
-                        except:
-                            st.warning("تعذر تحميل الصورة")
-            
-            if 'generated_image' in st.session_state and st.session_state.generated_image:
-                st.markdown("### 🎨 الصورة المُولَّدة:")
-                try:
-                    image_bytes = base64.b64decode(st.session_state.generated_image)
-                    st.image(image_bytes, caption="صورة مُولَّدة بالذكاء الاصطناعي", use_container_width=True)
-                    
-                    if st.session_state.get('image_url'):
-                        st.success(f"🔗 رابط الصورة: {st.session_state.image_url}")
-                        st.code(st.session_state.image_url)
-                except Exception as e:
-                    st.error(f"خطأ في عرض الصورة: {e}")
+            # Save to session state to display outside the button loop
+            st.session_state.post_generated = True
+
+    # Display Results (Outside the button loop to persist)
+    if st.session_state.get('post_generated') and st.session_state.get('post_text'):
+        st.markdown("---")
+        st.markdown("### 📝 المنشور الجاهز:")
+        st.markdown(f'<div class="generated-post">{st.session_state.post_text}</div>', unsafe_allow_html=True)
+        
+        # Text copy area
+        st.text_area("📋 انسخ النص:", st.session_state.post_text, height=150)
+        
+        # Show images if available
+        current_image_url = st.session_state.get('image_url')
+        
+        if 'rss_images' in st.session_state and st.session_state.rss_images:
+            st.markdown("### 🖼️ اختر صورة من المصادر:")
+            img_cols = st.columns(min(3, len(st.session_state.rss_images)))
+            for i, img in enumerate(st.session_state.rss_images[:3]):
+                with img_cols[i]:
+                    try:
+                        st.image(img['url'], caption=img.get('source', ''), use_container_width=True)
+                        if st.button("اختر هذه الصورة", key=f"sel_img_{i}"):
+                            current_image_url = img['url']
+                            st.session_state.image_url = current_image_url
+                            st.success("تم اختيار الصورة")
+                    except:
+                        st.warning("تعذر تحميل الصورة")
+        
+        if 'generated_image' in st.session_state and st.session_state.generated_image:
+            st.markdown("### 🎨 الصورة المُولَّدة:")
+            try:
+                image_bytes = base64.b64decode(st.session_state.generated_image)
+                st.image(image_bytes, caption="صورة مُولَّدة بالذكاء الاصطناعي", use_container_width=True)
+                
+                if st.session_state.get('image_url'):
+                    st.success(f"🔗 رابط الصورة: {st.session_state.image_url}")
+            except Exception as e:
+                st.error(f"خطأ في عرض الصورة: {e}")
+
+        # --- Facebook Posting Section ---
+        st.markdown("---")
+        st.markdown("### 🚀 نشر مباشر على فيسبوك")
+        
+        col_pub1, col_pub2 = st.columns([1, 2])
+        with col_pub1:
+            if st.button("📘 انشر الآن", type="primary", use_container_width=True):
+                if not fb_token:
+                    st.error("❌ يجب إدخال Page Access Token في الإعدادات أو Secrets")
+                else:
+                    with st.spinner("جاري النشر..."):
+                        res, err_msg = post_to_facebook_page(
+                            st.session_state.post_text, 
+                            fb_token, 
+                            st.session_state.get('image_url')
+                        )
+                        if res:
+                            st.success(f"✅ تم النشر بنجاح! ID: {res.get('id')}")
+                            st.balloons()
+                        else:
+                            st.error(err_msg)
 
 # ========================================
 # TAB 2: Chat Bot

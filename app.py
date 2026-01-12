@@ -1252,9 +1252,14 @@ with tab4:
     with col2:
         st.metric("🎁 عروض", len(data.get("offers", [])))
     with col3:
+        # Get count from session state if available (from status check), else estimate
+        rss_count = 30 # Default updated count
+        if 'bot_status' in st.session_state:
+             rss_count = st.session_state.bot_status.get('rss_count', 30)
+             
         st.metric(
-            "📰 مصادر RSS",
-            sum(len(v) for v in data.get("content_sources", {}).values()),
+            "📰 RSS مصادر",
+            f"{rss_count}+"
         )
     with col4:
         st.metric("📝 أنواع محتوى", len(CONTENT_SCENARIOS))

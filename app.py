@@ -184,6 +184,8 @@ SPORT_EN = {
     "تايكوندو": "taekwondo"
 }
 
+DEFAULT_FALLBACK_IMAGE = "https://i.ibb.co/xKGpF5sQ/469991854-122136396014386621-3832266993418146234-n.jpg"
+
 # --- Coach Persona ---
 COACH_SYSTEM_PROMPT = """أنت "كابتن عز غريب" - مدير ومدرب أكاديمية أبطال أكتوبر للفنون القتالية والجمباز.
 
@@ -693,8 +695,11 @@ with tab1:
                 st.session_state.rss_images = rss_images
                 st.session_state.post_text = post_text
                 st.session_state.chosen_sport = chosen_sport
+                st.session_state.image_url = rss_images[0]['url'] # Default to first RSS image
             else:
-                st.warning("⚠️ لم يتم العثور على صور في المصادر (RSS). يمكنك استخدام صورة من جهازك عند النشر يدوياً.")
+                st.warning("⚠️ لم يتم العثور على صور حديثة في المصادر، سيتم استخدام صورة كابتن عز الافتراضية.")
+                st.session_state.image_url = DEFAULT_FALLBACK_IMAGE
+                st.image(DEFAULT_FALLBACK_IMAGE, caption="صورة افتراضية", width=300)
             
             progress.progress(100)
             status.success("✅ تم!")

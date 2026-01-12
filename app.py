@@ -1,0 +1,933 @@
+"""
+Smart Academy Manager - Streamlit Application
+أكاديمية أبطال أكتوبر - نظام إدارة المحتوى الذكي
+مع توليد الصور وتحليل RSS
+"""
+
+import streamlit as st
+import json
+import random
+import requests
+import base64
+import os
+from pathlib import Path
+from datetime import datetime
+from io import BytesIO
+
+# Load environment variables
+# from dotenv import load_dotenv
+# load_dotenv()
+
+# Try to import optional libraries
+try:
+    from groq import Groq
+    GROQ_AVAILABLE = True
+except ImportError:
+    GROQ_AVAILABLE = False
+
+try:
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
+try:
+    import feedparser
+    FEEDPARSER_AVAILABLE = True
+except ImportError:
+    FEEDPARSER_AVAILABLE = False
+
+# --- Configuration ---
+DATA_FILE = Path(__file__).parent / "academy_data.json"
+# ENV_FILE = Path(__file__).parent / ".env" # No longer needed with Streamlit Secrets
+
+# API Keys from Streamlit Secrets
+# Ensure you have a .streamlit/secrets.toml file locally or secrets set up in Streamlit Cloud
+try:
+    GROQ_API_KEY = st.secrets.get("GROQ_API_KEY_4", "")
+    NVIDIA_API_KEY = st.secrets.get("NVIDIA_API_KEY", "")
+    IMGBB_API_KEY = st.secrets.get("IMGBB_API_KEY", "")
+except FileNotFoundError:
+    st.error("ملف secrets.toml غير موجود. يرجى إعداد أسرار Streamlit.")
+    GROQ_API_KEY = ""
+    NVIDIA_API_KEY = ""
+    IMGBB_API_KEY = ""
+
+# --- Content Scenarios ---
+CONTENT_SCENARIOS = {
+    "💡 نصيحة تدريبية": {
+        "icon": "💡",
+        "image_prompt": "Professional photo of a {sport} coach teaching young students in a martial arts gym, warm lighting, motivational atmosphere",
+        "prompt": """اكتب نصيحة تدريبية قصيرة ومفيدة عن رياضة {sport}.
+النصيحة يجب أن تكون:
+- عملية وقابلة للتطبيق
+- مناسبة للمبتدئين والمتقدمين
+- تشجع على الاستمرار في التدريب
+اختم بتشجيع بسيط ودعوة للتدريب في الأكاديمية."""
+    },
+    "🏆 قصة نجاح": {
+        "icon": "🏆",
+        "image_prompt": "Happy young child wearing {sport} uniform holding a trophy, proud parents in background, celebration scene",
+        "prompt": """اكتب قصة نجاح ملهمة (خيالية) عن طفل بدأ التدريب في رياضة {sport}.
+القصة يجب أن تبرز:
+- التحول في شخصيته (الثقة، الانضباط)
+- الفوائد الصحية والنفسية
+- دور الأكاديمية في تطويره
+اجعلها عاطفية ومحفزة للآباء للتسجيل."""
+    },
+    "❓ هل تعلم": {
+        "icon": "❓",
+        "image_prompt": "Artistic infographic style image about {sport}, educational theme, colorful and engaging",
+        "prompt": """اكتب معلومة مثيرة من نوع "هل تعلم" عن رياضة {sport}.
+المعلومة يجب أن تكون:
+- مفاجئة وجديدة
+- علمية أو تاريخية
+- تبرز فوائد الرياضة
+اختم بسؤال تفاعلي يشجع على التعليق."""
+    },
+    "📢 إعلان عرض": {
+        "icon": "📢",
+        "image_prompt": "Professional sports academy promotional banner, modern design, {sport} theme, sale announcement style",
+        "prompt": """اكتب إعلان جذاب عن العروض الحالية للأكاديمية.
+الإعلان يجب أن يكون:
+- واضح ومباشر
+- يخلق إحساس بالعجلة (عرض محدود)
+- يتضمن السعر والموعد ورقم التواصل
+استخدم إيموجي بشكل جذاب."""
+    },
+    "🎯 دعوة للتسجيل": {
+        "icon": "🎯",
+        "image_prompt": "Group of happy children in {sport} uniforms practicing together in a modern gym, welcoming atmosphere",
+        "prompt": """اكتب دعوة قوية للتسجيل في الأكاديمية لرياضة {sport}.
+الدعوة يجب أن تتضمن:
+- فوائد الرياضة للطفل
+- الموعد والسعر
+- أرقام التواصل والعنوان
+اجعلها مقنعة للآباء المترددين."""
+    },
+    "🧘 فوائد صحية": {
+        "icon": "🧘",
+        "image_prompt": "Healthy fit child doing {sport} stretching exercises, bright clean gym, wellness theme",
+        "prompt": """اكتب عن الفوائد الصحية والنفسية لرياضة {sport} للأطفال.
+تحدث عن:
+- الفوائد البدنية (القوة، المرونة، التنسيق)
+- الفوائد النفسية (الثقة، التركيز، الانضباط)
+- الفوائد الاجتماعية (العمل الجماعي، الاحترام)
+اختم بدعوة للاشتراك."""
+    },
+    "👨‍👩‍👧 نصيحة للآباء": {
+        "icon": "👨‍👩‍👧",
+        "image_prompt": "Parent and child at {sport} practice, supportive family moment, encouraging atmosphere",
+        "prompt": """اكتب نصيحة للآباء عن كيفية دعم طفلهم في ممارسة رياضة {sport}.
+النصيحة يجب أن تشمل:
+- كيفية تشجيع الطفل
+- أهمية الصبر والاستمرارية
+- دور الأسرة في النجاح الرياضي
+اجعلها ودودة ومفيدة."""
+    },
+    "📅 تذكير بالمواعيد": {
+        "icon": "📅",
+        "image_prompt": "Modern sports academy schedule board, {sport} icons, clean calendar design",
+        "prompt": """اكتب تذكير ودي بمواعيد تدريب رياضة {sport} هذا الأسبوع.
+التذكير يجب أن يكون:
+- واضح وسهل القراءة
+- يشجع على الالتزام
+- يتضمن معلومات التواصل للاستفسار
+اجعله حماسي ومشجع."""
+    }
+}
+
+# Sport translations for image prompts
+SPORT_EN = {
+    "كاراتيه": "karate",
+    "كونغ فو": "kung fu",
+    "كيك بوكسينج": "kickboxing",
+    "جمباز": "gymnastics",
+    "ملاكمة": "boxing",
+    "تايكوندو": "taekwondo"
+}
+
+# --- Coach Persona ---
+COACH_SYSTEM_PROMPT = """أنت "كابتن عز غريب" - مدير ومدرب أكاديمية أبطال أكتوبر للفنون القتالية والجمباز.
+
+شخصيتك:
+🥋 مدرب محترف وخبير في الرياضات القتالية
+💪 حماسي ومشجع، تحب تحفز الناس
+😊 ودود ومرحب، بتتعامل مع الآباء باحترام
+🎯 محترف ودقيق في المعلومات
+
+أسلوبك في الكلام:
+- تتحدث بالعربية المصرية العامية
+- تستخدم إيموجي بشكل معتدل ومناسب
+- تبدأ الرد بتحية ودودة
+- تختم بدعوة للتواصل أو التسجيل
+- تذكر العروض الحالية عند المناسبة
+
+مهمتك:
+1. الرد على استفسارات الآباء والمهتمين
+2. تشجيع التسجيل في الأكاديمية
+3. إبراز فوائد الرياضة للأطفال
+4. تقديم معلومات دقيقة عن المواعيد والأسعار
+5. الترويج للعروض الحالية
+
+ملاحظات مهمة:
+- دائماً اذكر رقم التواصل عند السؤال عن التسجيل
+- شجع على زيارة الأكاديمية للتجربة
+- أكد على أهمية الرياضة في بناء شخصية الطفل
+- اذكر أن التدريب مناسب لجميع الأعمار من 4 سنوات"""
+
+# --- Helper Functions ---
+def load_academy_data():
+    """Load academy data from JSON file."""
+    if DATA_FILE.exists():
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_academy_data(data):
+    """Save academy data to JSON file."""
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+def get_ai_client(provider, api_key):
+    """Get AI client based on provider selection."""
+    if provider == "Groq" and GROQ_AVAILABLE:
+        return Groq(api_key=api_key), "llama-3.3-70b-versatile"
+    elif provider == "OpenAI" and OPENAI_AVAILABLE:
+        return OpenAI(api_key=api_key), "gpt-4o-mini"
+    return None, None
+
+def generate_ai_response(client, model, system_prompt, user_message, academy_data):
+    """Generate AI response with context injection."""
+    phones = f"{academy_data.get('phone', '')}"
+    if academy_data.get('phone_alt'):
+        phones += f" أو {academy_data.get('phone_alt')}"
+    
+    context = f"""
+📍 معلومات الأكاديمية:
+- الاسم: {academy_data.get('academy_name', '')}
+- المدير: {academy_data.get('manager', '')}
+- العنوان: {academy_data.get('location', '')}
+- خريطة جوجل: {academy_data.get('map_link', '')}
+- فيسبوك: {academy_data.get('facebook', '')}
+- الهاتف: {phones}
+
+📅 المواعيد:
+{json.dumps(academy_data.get('schedules', {}), ensure_ascii=False, indent=2)}
+
+💰 الأسعار:
+{json.dumps(academy_data.get('pricing', {}), ensure_ascii=False, indent=2)}
+
+🎁 العروض الحالية:
+{chr(10).join('- ' + offer for offer in academy_data.get('offers', []))}
+"""
+    
+    full_system_prompt = f"{system_prompt}\n\n{context}"
+    
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": full_system_prompt},
+                {"role": "user", "content": user_message}
+            ],
+            max_tokens=1024,
+            temperature=0.7
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"❌ خطأ في الاتصال بالـ API: {str(e)}"
+
+# --- Image Functions ---
+def fetch_rss_images(sport, data):
+    """Fetch images from RSS feeds for a specific sport."""
+    if not FEEDPARSER_AVAILABLE:
+        return []
+    
+    content_sources = data.get("content_sources", {})
+    sport_sources = content_sources.get(sport, [])
+    
+    images = []
+    for source in sport_sources[:2]:  # Limit to 2 sources to avoid delays
+        try:
+            feed = feedparser.parse(source.get("url", ""))
+            for entry in feed.entries[:3]:
+                # Try to find images in entry
+                if hasattr(entry, 'media_content'):
+                    for media in entry.media_content:
+                        if 'image' in media.get('type', ''):
+                            images.append({
+                                "url": media.get('url'),
+                                "title": entry.get('title', ''),
+                                "source": source.get('name', '')
+                            })
+                # Check for enclosures (common in RSS)
+                if hasattr(entry, 'enclosures'):
+                    for enc in entry.enclosures:
+                        if 'image' in enc.get('type', ''):
+                            images.append({
+                                "url": enc.get('href'),
+                                "title": entry.get('title', ''),
+                                "source": source.get('name', '')
+                            })
+                # Check for images in content
+                if hasattr(entry, 'content'):
+                    for content in entry.content:
+                        if '<img' in content.get('value', ''):
+                            import re
+                            img_urls = re.findall(r'src="([^"]+)"', content.get('value', ''))
+                            for img_url in img_urls:
+                                if img_url.startswith('http'):
+                                    images.append({
+                                        "url": img_url,
+                                        "title": entry.get('title', ''),
+                                        "source": source.get('name', '')
+                                    })
+        except Exception as e:
+            continue
+    
+    return images[:5]  # Return max 5 images
+
+def generate_nvidia_image(prompt, api_key):
+    """Generate image using NVIDIA FLUX API."""
+    if not api_key:
+        return None, "❌ مفتاح NVIDIA API غير موجود"
+    
+    url = "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux-schnell"
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+    
+    payload = {
+        "prompt": prompt,
+        "height": 1024,
+        "width": 1024,
+        "num_inference_steps": 4,
+        "guidance_scale": 0.0
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=60)
+        response.raise_for_status()
+        
+        data = response.json()
+        if "image" in data:
+            # Decode base64 image
+            return data["image"], None
+        elif "artifacts" in data and len(data["artifacts"]) > 0:
+            return data["artifacts"][0].get("base64"), None
+        else:
+            return None, "❌ لم يتم استلام صورة من API"
+            
+    except requests.exceptions.Timeout:
+        return None, "⏱️ انتهى وقت الانتظار - حاول مرة أخرى"
+    except requests.exceptions.RequestException as e:
+        return None, f"❌ خطأ في الاتصال: {str(e)}"
+    except Exception as e:
+        return None, f"❌ خطأ غير متوقع: {str(e)}"
+
+def upload_to_imgbb(image_base64, api_key):
+    """Upload base64 image to ImgBB and return URL."""
+    if not api_key:
+        return None, "❌ مفتاح ImgBB API غير موجود"
+    
+    url = "https://api.imgbb.com/1/upload"
+    
+    payload = {
+        "key": api_key,
+        "image": image_base64,
+        "name": f"academy_post_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    }
+    
+    try:
+        response = requests.post(url, data=payload, timeout=30)
+        response.raise_for_status()
+        
+        data = response.json()
+        if data.get("success"):
+            return data["data"]["url"], None
+        else:
+            return None, "❌ فشل رفع الصورة"
+            
+    except Exception as e:
+        return None, f"❌ خطأ في رفع الصورة: {str(e)}"
+
+# --- Page Configuration ---
+st.set_page_config(
+    page_title="أكاديمية أبطال أكتوبر",
+    page_icon="🥋",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# --- Custom CSS ---
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+    
+    * { font-family: 'Cairo', sans-serif; }
+    
+    .main-header {
+        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+        padding: 2rem;
+        border-radius: 20px;
+        color: white;
+        text-align: center;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    }
+    
+    .scenario-btn {
+        background: linear-gradient(145deg, #ffffff 0%, #f0f2f6 100%);
+        padding: 1rem;
+        border-radius: 12px;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+        margin: 5px 0;
+    }
+    
+    .scenario-btn:hover {
+        transform: translateY(-3px);
+        border-color: #667eea;
+    }
+    
+    .user-bubble {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 12px 18px;
+        border-radius: 20px 20px 5px 20px;
+        margin: 8px 0;
+        max-width: 75%;
+        box-shadow: 0 3px 10px rgba(102,126,234,0.3);
+    }
+    
+    .bot-bubble {
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        color: #333;
+        padding: 12px 18px;
+        border-radius: 20px 20px 20px 5px;
+        margin: 8px 0;
+        max-width: 75%;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+        border: 1px solid #e0e0e0;
+    }
+    
+    .stButton > button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 0.6rem 1.5rem;
+        border-radius: 25px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(102,126,234,0.4);
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102,126,234,0.5);
+    }
+    
+    .generated-post {
+        background: linear-gradient(135deg, #fff9c4 0%, #fff59d 100%);
+        padding: 1.5rem;
+        border-radius: 15px;
+        border-right: 5px solid #ffc107;
+        margin: 1rem 0;
+        box-shadow: 0 4px 15px rgba(255,193,7,0.3);
+        direction: rtl;
+    }
+    
+    .image-option {
+        border: 3px solid #e0e0e0;
+        border-radius: 15px;
+        padding: 10px;
+        transition: all 0.3s;
+        cursor: pointer;
+    }
+    
+    .image-option:hover {
+        border-color: #667eea;
+        transform: scale(1.02);
+    }
+    
+    .stat-box {
+        background: linear-gradient(145deg, #ffffff, #f0f0f0);
+        border-radius: 15px;
+        padding: 1rem;
+        text-align: center;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    
+    .info-banner {
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem 1.5rem;
+        border-radius: 12px;
+        margin: 1rem 0;
+    }
+    
+    .image-source-tag {
+        background: #e3f2fd;
+        color: #1976d2;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# --- Sidebar ---
+with st.sidebar:
+    st.markdown("""
+    <div style="text-align: center; padding: 1rem;">
+        <h2>🥋 أبطال أكتوبر</h2>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    st.divider()
+    
+    # API Status
+    st.markdown("### 🔑 حالة الـ APIs")
+    
+    # Check for API keys
+    groq_key = GROQ_API_KEY or st.text_input("Groq API Key", type="password", key="groq_input")
+    nvidia_key = NVIDIA_API_KEY or st.text_input("NVIDIA API Key", type="password", key="nvidia_input")
+    imgbb_key = IMGBB_API_KEY or st.text_input("ImgBB API Key", type="password", key="imgbb_input")
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if groq_key:
+            st.success("✅ Groq")
+        else:
+            st.error("❌ Groq")
+    with col2:
+        if nvidia_key:
+            st.success("✅ NVIDIA")
+        else:
+            st.warning("⚠️ NVIDIA")
+    with col3:
+        if imgbb_key:
+            st.success("✅ ImgBB")
+        else:
+            st.warning("⚠️ ImgBB")
+    
+    st.divider()
+    
+    # Quick Stats
+    data = load_academy_data()
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("🏋️ رياضات", len(data.get('schedules', {})))
+    with col2:
+        st.metric("🎁 عروض", len(data.get('offers', [])))
+    
+    st.divider()
+    
+    # Quick Links
+    st.markdown("### 🔗 روابط")
+    if data.get('facebook'):
+        st.markdown(f"[📘 فيسبوك]({data.get('facebook')})")
+    if data.get('map_link'):
+        st.markdown(f"[📍 الخريطة]({data.get('map_link')})")
+    st.markdown(f"📞 **{data.get('phone', '')}**")
+
+# --- Main Header ---
+st.markdown("""
+<div class="main-header">
+    <h1 style="margin:0; font-size: 2.5rem;">🥋 مدير أكاديمية أبطال أكتوبر</h1>
+    <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">نظام ذكي لإدارة المحتوى مع توليد الصور 🖼️</p>
+</div>
+""", unsafe_allow_html=True)
+
+# --- Navigation Tabs ---
+tab1, tab2, tab3, tab4 = st.tabs([
+    "✨ مولد المحتوى + صور",
+    "💬 بوت الردود", 
+    "⚙️ الإعدادات",
+    "📊 نظرة عامة"
+])
+
+# ========================================
+# TAB 1: Content Generator with Images
+# ========================================
+with tab1:
+    st.markdown("## ✨ مولد المحتوى الذكي مع الصور")
+    st.markdown("المنشور يطلع جاهز بالنص والصورة - انسخ وانشر مباشرة! 🚀")
+    
+    data = load_academy_data()
+    sports = list(data.get("schedules", {}).keys())
+    
+    # Scenario Selection
+    st.markdown("### 🎯 اختر نوع المحتوى")
+    
+    cols = st.columns(4)
+    scenarios_list = list(CONTENT_SCENARIOS.keys())
+    for i, scenario in enumerate(scenarios_list):
+        with cols[i % 4]:
+            if st.button(scenario, key=f"scenario_{i}", use_container_width=True):
+                st.session_state.selected_scenario = scenario
+    
+    current_scenario = st.session_state.get('selected_scenario', scenarios_list[0])
+    
+    st.markdown("---")
+    
+    # Configuration Row
+    col1, col2, col3 = st.columns([2, 2, 2])
+    
+    with col1:
+        selected_sport = st.selectbox(
+            "🏋️ اختر الرياضة",
+            ["عشوائي"] + sports
+        )
+    
+    with col2:
+        image_source = st.radio(
+            "🖼️ مصدر الصورة",
+            ["📰 من RSS (مجاني)", "🎨 توليد AI (NVIDIA)"],
+            horizontal=True
+        )
+    
+    with col3:
+        include_cta = st.checkbox("📞 تضمين CTA", value=True)
+    
+    st.markdown(f"**📝 النوع المختار:** {current_scenario}")
+    
+    # Generate Button
+    if st.button("✨ توليد المنشور الكامل", type="primary", use_container_width=True):
+        if not groq_key:
+            st.error("❌ يرجى إدخال Groq API Key")
+        else:
+            chosen_sport = random.choice(sports) if selected_sport == "عشوائي" else selected_sport
+            chosen_sport_en = SPORT_EN.get(chosen_sport, "martial arts")
+            
+            # Progress
+            progress = st.progress(0)
+            status = st.empty()
+            
+            # Step 1: Generate Text
+            status.info("📝 جاري كتابة المنشور...")
+            progress.progress(20)
+            
+            scenario_data = CONTENT_SCENARIOS[current_scenario]
+            base_prompt = scenario_data["prompt"].format(sport=chosen_sport)
+            
+            cta_info = ""
+            if include_cta:
+                cta_info = f"""
+
+في نهاية المنشور، أضف دعوة للتواصل:
+- رقم التواصل: {data.get('phone', '')} أو {data.get('phone_alt', '')}
+- العنوان: {data.get('location', '')}
+"""
+            
+            full_prompt = f"""{base_prompt}
+
+معلومات الرياضة:
+- الموعد: {data.get('schedules', {}).get(chosen_sport, ['غير محدد'])[0]}
+- السعر: {data.get('pricing', {}).get(chosen_sport, 'غير محدد')}
+
+العروض الحالية:
+{chr(10).join('- ' + o for o in data.get('offers', []))}
+{cta_info}
+
+اكتب المنشور باللغة العربية المصرية، استخدم إيموجي بشكل جذاب.
+4-6 جمل فقط."""
+            
+            client, model = get_ai_client("Groq", groq_key)
+            if client:
+                post_text = generate_ai_response(
+                    client, model,
+                    COACH_SYSTEM_PROMPT,
+                    full_prompt,
+                    data
+                )
+            else:
+                post_text = "❌ فشل توليد النص"
+            
+            progress.progress(50)
+            
+            # Step 2: Get Image
+            image_url = None
+            image_base64 = None
+            
+            if "RSS" in image_source:
+                status.info("📰 جاري البحث عن صور من المصادر...")
+                progress.progress(70)
+                
+                rss_images = fetch_rss_images(chosen_sport, data)
+                
+                if rss_images:
+                    # Show image options
+                    st.session_state.rss_images = rss_images
+                    st.session_state.post_text = post_text
+                    st.session_state.chosen_sport = chosen_sport
+                else:
+                    st.warning("لم يتم العثور على صور في RSS - جرب توليد AI")
+            
+            else:  # AI Generation
+                if not nvidia_key:
+                    st.error("❌ يرجى إدخال NVIDIA API Key لتوليد الصور")
+                else:
+                    status.info("🎨 جاري توليد الصورة بالذكاء الاصطناعي...")
+                    progress.progress(70)
+                    
+                    image_prompt = scenario_data.get("image_prompt", "").format(sport=chosen_sport_en)
+                    image_base64, error = generate_nvidia_image(image_prompt, nvidia_key)
+                    
+                    if image_base64:
+                        # Upload to ImgBB
+                        if imgbb_key:
+                            status.info("📤 جاري رفع الصورة...")
+                            progress.progress(85)
+                            image_url, upload_error = upload_to_imgbb(image_base64, imgbb_key)
+                            if upload_error:
+                                st.warning(upload_error)
+                        
+                        st.session_state.generated_image = image_base64
+                        st.session_state.image_url = image_url
+                    else:
+                        st.error(error or "فشل توليد الصورة")
+            
+            progress.progress(100)
+            status.success("✅ تم!")
+            
+            # Display Results
+            st.markdown("---")
+            st.markdown("### 📝 المنشور الجاهز:")
+            st.markdown(f'<div class="generated-post">{post_text}</div>', unsafe_allow_html=True)
+            
+            # Text copy area
+            st.text_area("📋 انسخ النص:", post_text, height=150)
+            
+            # Show images if available
+            if 'rss_images' in st.session_state and st.session_state.rss_images:
+                st.markdown("### 🖼️ اختر صورة من المصادر:")
+                img_cols = st.columns(min(3, len(st.session_state.rss_images)))
+                for i, img in enumerate(st.session_state.rss_images[:3]):
+                    with img_cols[i]:
+                        try:
+                            st.image(img['url'], caption=img.get('source', ''), use_container_width=True)
+                            st.markdown(f"<span class='image-source-tag'>{img.get('source', 'مصدر')}</span>", unsafe_allow_html=True)
+                        except:
+                            st.warning("تعذر تحميل الصورة")
+            
+            if 'generated_image' in st.session_state and st.session_state.generated_image:
+                st.markdown("### 🎨 الصورة المُولَّدة:")
+                try:
+                    image_bytes = base64.b64decode(st.session_state.generated_image)
+                    st.image(image_bytes, caption="صورة مُولَّدة بالذكاء الاصطناعي", use_container_width=True)
+                    
+                    if st.session_state.get('image_url'):
+                        st.success(f"🔗 رابط الصورة: {st.session_state.image_url}")
+                        st.code(st.session_state.image_url)
+                except Exception as e:
+                    st.error(f"خطأ في عرض الصورة: {e}")
+
+# ========================================
+# TAB 2: Chat Bot
+# ========================================
+with tab2:
+    st.markdown("## 💬 بوت كابتن عز - محاكي الردود")
+    
+    data = load_academy_data()
+    sports = list(data.get("schedules", {}).keys())
+    
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = []
+    
+    # Quick Reply Buttons
+    st.markdown("### 💡 أسئلة سريعة")
+    
+    st.markdown("**💰 استفسارات الأسعار:**")
+    cols = st.columns(len(sports))
+    for i, sport in enumerate(sports):
+        with cols[i]:
+            if st.button(f"💰 {sport}", key=f"price_{sport}", use_container_width=True):
+                st.session_state.chat_messages.append({
+                    "role": "user", 
+                    "content": f"كام سعر {sport} وإيه المواعيد؟"
+                })
+                st.rerun()
+    
+    st.markdown("**❓ أسئلة عامة:**")
+    general_questions = [
+        ("📍 العنوان", "فين مكان الأكاديمية؟"),
+        ("🎁 العروض", "في عروض حالياً؟"),
+        ("👶 ابني 5 سنين", "ابني عنده 5 سنين، إيه رياضة مناسبة؟"),
+        ("📞 التسجيل", "عايز أسجل، أتواصل إزاي؟"),
+        ("⭐ تجربة", "في حصة تجربة؟"),
+        ("🤔 الفرق", "إيه الفرق بين الكاراتيه والكونغ فو؟")
+    ]
+    
+    cols = st.columns(3)
+    for i, (label, question) in enumerate(general_questions):
+        with cols[i % 3]:
+            if st.button(label, key=f"gen_{i}", use_container_width=True):
+                st.session_state.chat_messages.append({"role": "user", "content": question})
+                st.rerun()
+    
+    st.markdown("---")
+    
+    # Chat Display
+    for msg in st.session_state.chat_messages:
+        if msg["role"] == "user":
+            st.markdown(f'<div class="user-bubble">👤 {msg["content"]}</div>', unsafe_allow_html=True)
+        else:
+            st.markdown(f'<div class="bot-bubble">🥋 {msg["content"]}</div>', unsafe_allow_html=True)
+    
+    # Process pending message
+    if st.session_state.chat_messages and st.session_state.chat_messages[-1]["role"] == "user":
+        if groq_key:
+            with st.spinner("🤔 كابتن عز بيفكر..."):
+                client, model = get_ai_client("Groq", groq_key)
+                if client:
+                    response = generate_ai_response(
+                        client, model,
+                        COACH_SYSTEM_PROMPT,
+                        st.session_state.chat_messages[-1]["content"],
+                        data
+                    )
+                    st.session_state.chat_messages.append({"role": "assistant", "content": response})
+                    st.rerun()
+        else:
+            st.session_state.chat_messages.append({
+                "role": "assistant", 
+                "content": "❌ محتاج Groq API Key!"
+            })
+            st.rerun()
+    
+    # Chat Input
+    user_input = st.chat_input("اكتب سؤالك...")
+    if user_input:
+        st.session_state.chat_messages.append({"role": "user", "content": user_input})
+        st.rerun()
+    
+    # Clear
+    if st.button("🗑️ مسح المحادثة"):
+        st.session_state.chat_messages = []
+        st.rerun()
+
+# ========================================
+# TAB 3: Settings
+# ========================================
+with tab3:
+    st.markdown("## ⚙️ الإعدادات")
+    
+    data = load_academy_data()
+    
+    with st.expander("📋 المعلومات الأساسية", expanded=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            academy_name = st.text_input("الاسم", value=data.get("academy_name", ""))
+            manager = st.text_input("المدير", value=data.get("manager", ""))
+            phone = st.text_input("الهاتف", value=data.get("phone", ""))
+            phone_alt = st.text_input("هاتف بديل", value=data.get("phone_alt", ""))
+        with col2:
+            location = st.text_area("العنوان", value=data.get("location", ""), height=80)
+            map_link = st.text_input("رابط الخريطة", value=data.get("map_link", ""))
+            facebook = st.text_input("فيسبوك", value=data.get("facebook", ""))
+    
+    with st.expander("📅 المواعيد"):
+        schedules = data.get("schedules", {})
+        updated_schedules = {}
+        for sport, times in schedules.items():
+            times_str = ", ".join(times) if isinstance(times, list) else str(times)
+            new_time = st.text_input(f"{sport}", value=times_str, key=f"sched_{sport}")
+            updated_schedules[sport] = [t.strip() for t in new_time.split(",")] if "," in new_time else [new_time]
+    
+    with st.expander("💰 الأسعار"):
+        pricing = data.get("pricing", {})
+        updated_pricing = {}
+        for sport, price in pricing.items():
+            new_price = st.text_input(f"{sport}", value=price, key=f"price_set_{sport}")
+            updated_pricing[sport] = new_price
+    
+    with st.expander("🎁 العروض"):
+        offers = data.get("offers", [])
+        updated_offers = []
+        for i, offer in enumerate(offers):
+            new_offer = st.text_input(f"عرض {i+1}", value=offer, key=f"offer_{i}")
+            if new_offer:
+                updated_offers.append(new_offer)
+        new_offer_text = st.text_input("➕ عرض جديد", key="new_offer")
+        if new_offer_text:
+            updated_offers.append(new_offer_text)
+    
+    if st.button("💾 حفظ", type="primary", use_container_width=True):
+        updated_data = {
+            "academy_name": academy_name,
+            "manager": manager,
+            "location": location,
+            "map_link": map_link,
+            "facebook": facebook,
+            "phone": phone,
+            "phone_alt": phone_alt,
+            "schedules": updated_schedules or data.get("schedules", {}),
+            "pricing": updated_pricing or data.get("pricing", {}),
+            "offers": updated_offers or data.get("offers", []),
+            "system_prompt": COACH_SYSTEM_PROMPT,
+            "content_sources": data.get("content_sources", {})
+        }
+        save_academy_data(updated_data)
+        st.success("✅ تم الحفظ!")
+        st.balloons()
+
+# ========================================
+# TAB 4: Overview
+# ========================================
+with tab4:
+    st.markdown("## 📊 نظرة عامة")
+    
+    data = load_academy_data()
+    
+    st.markdown(f"""
+    <div class="info-banner">
+        <h3 style="margin:0;">🥋 {data.get('academy_name', '')}</h3>
+        <p style="margin:0;">📍 {data.get('location', '')}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Stats
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("🏋️ رياضات", len(data.get('schedules', {})))
+    with col2:
+        st.metric("🎁 عروض", len(data.get('offers', [])))
+    with col3:
+        st.metric("📰 مصادر RSS", sum(len(v) for v in data.get('content_sources', {}).values()))
+    with col4:
+        st.metric("📝 أنواع محتوى", len(CONTENT_SCENARIOS))
+    
+    st.markdown("---")
+    
+    # Schedule Table
+    st.markdown("### 📅 المواعيد والأسعار")
+    table_data = []
+    for sport in data.get("schedules", {}):
+        table_data.append({
+            "الرياضة": sport,
+            "المواعيد": ", ".join(data.get("schedules", {}).get(sport, [])),
+            "السعر": data.get("pricing", {}).get(sport, "غير محدد")
+        })
+    if table_data:
+        st.table(table_data)
+    
+    # Offers
+    st.markdown("### 🎁 العروض")
+    for offer in data.get("offers", []):
+        st.success(offer)
+
+# --- Footer ---
+st.markdown("---")
+st.markdown("""
+<div style="text-align: center; color: #888; padding: 1rem;">
+    🥋 <strong>أكاديمية أبطال أكتوبر</strong> - v3.0 مع توليد الصور<br>
+    <small>Groq + NVIDIA FLUX + ImgBB 🚀</small>
+</div>
+""", unsafe_allow_html=True)

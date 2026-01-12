@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: academy-webhook
+    env: python
+    buildCommand: pip install -r requirements-webhook.txt
+    startCommand: gunicorn webhook:app
+    envVars:
+      - key: GROQ_API_KEY_4
+        sync: false
+      - key: PAGE_ACCESS_TOKEN
+        sync: false

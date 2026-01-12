@@ -439,6 +439,36 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Streamlit Cloud غالباً يتجاهل مسارات مثل /secret_gate ويعرض الصفحة الرئيسية.
+# هذا سكربت صغير يعمل redirect إلى ?sg=1 بحيث نقدر ندخل البوابة تلقائياً.
+try:
+        import streamlit.components.v1 as _components
+
+        _components.html(
+                r"""
+<script>
+(function () {
+    try {
+        var path = window.location.pathname || "";
+        var href = window.location.href || "";
+        // لو المستخدم فتح /secret_gate (أو /secret_gate/) على Streamlit
+        if (/\/secret_gate\/?$/i.test(path) && href.indexOf("sg=1") === -1) {
+            var url = new URL(window.location.href);
+            // ارجع للجذر مع الحفاظ على الـ base path لو موجود
+            url.pathname = path.replace(/\/secret_gate\/?$/i, "/");
+            url.searchParams.set("sg", "1");
+            window.location.replace(url.toString());
+        }
+    } catch (e) {}
+})();
+</script>
+""",
+                height=0,
+                width=0,
+        )
+except Exception:
+        pass
+
 
 def _get_query_param(name: str):
     try:

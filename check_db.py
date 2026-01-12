@@ -1,6 +1,6 @@
 import sqlite3
 
-conn = sqlite3.connect('saas.db')
+conn = sqlite3.connect("saas.db")
 cur = conn.cursor()
 
 # Check tables

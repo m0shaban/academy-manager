@@ -440,7 +440,8 @@ st.set_page_config(
 )
 
 # --- Premium UI/UX CSS ---
-st.markdown("""
+st.markdown(
+    """
 <style>
 /* ===== PREMIUM DARK THEME ===== */
 @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
@@ -1134,12 +1135,16 @@ label {
     text-align: center !important;
 }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # --- Main Header ---
 data = load_academy_data()
-system_name = data.get('system_name', '🥋 مدير أكاديمية أبطال أكتوبر')
-system_subtitle = data.get('system_subtitle', 'نظام ذكي لإدارة المحتوى مع توليد الصور 🖼️')
+system_name = data.get("system_name", "🥋 مدير أكاديمية أبطال أكتوبر")
+system_subtitle = data.get(
+    "system_subtitle", "نظام ذكي لإدارة المحتوى مع توليد الصور 🖼️"
+)
 
 st.markdown(
     f"""
@@ -1159,7 +1164,7 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
         "💬 البوت",
         "📊 نظرة عامة",
         "⚙️ الإعدادات",
-        "🚀 دليل الإعداد"
+        "🚀 دليل الإعداد",
     ]
 )
 
@@ -1273,7 +1278,7 @@ with tab1:
                 )
                 fb_img = random.choice(FALLBACK_IMAGES)
                 st.session_state.image_url = fb_img
-                st.session_state.post_text = post_text # Save the text!
+                st.session_state.post_text = post_text  # Save the text!
                 st.image(fb_img, caption="صورة احتياطية (من المجموعة)", width=300)
 
             progress.progress(100)
@@ -1462,7 +1467,7 @@ https://www.youm7.com/rss/SectionRss?SectionID=298"""
                         # Clean URL
                         if webhook_url.endswith("/"):
                             webhook_url = webhook_url[:-1]
-                            
+
                         status_res = requests.get(f"{webhook_url}/status", timeout=5)
                         if status_res.status_code == 200:
                             st.session_state.bot_status = status_res.json()
@@ -1470,18 +1475,20 @@ https://www.youm7.com/rss/SectionRss?SectionID=298"""
                             st.error("السيرفر لا يستجيب بالشكل الصحيح")
                     except Exception as e:
                         st.error(f"فشل الاتصال: {e}")
-        
+
         with col_s2:
-            if 'bot_status' in st.session_state:
+            if "bot_status" in st.session_state:
                 bs = st.session_state.bot_status
-                st.info(f"""
+                st.info(
+                    f"""
                 - **الحالة:** {bs.get('status')} ✅
                 - **توقيت السيرفر:** {bs.get('time_cairo')}
                 - **الساعات النشطة:** {bs.get('active_hours')}
                 - **عدد المصادر:** {bs.get('rss_count')}
                 - **مزاج الكابتن:** {bs.get('mood')}
                 - **آخر نشر تلقائي:** {bs.get('last_post_hour')}
-                """)
+                """
+                )
 
     st.divider()
 
@@ -1601,7 +1608,9 @@ with tab3:
     cols = st.columns(len(sports))
     for i, sport in enumerate(sports):
         with cols[i]:
-            if st.button(f"💰 {sport}", key=f"chat_price_{sport}", use_container_width=True):
+            if st.button(
+                f"💰 {sport}", key=f"chat_price_{sport}", use_container_width=True
+            ):
                 st.session_state.chat_messages.append(
                     {"role": "user", "content": f"كام سعر {sport} وإيه المواعيد؟"}
                 )
@@ -1775,14 +1784,11 @@ with tab4:
         st.metric("🎁 عروض", len(data.get("offers", [])))
     with col3:
         # Get count from session state if available (from status check), else estimate
-        rss_count = 30 # Default updated count
-        if 'bot_status' in st.session_state:
-             rss_count = st.session_state.bot_status.get('rss_count', 30)
-             
-        st.metric(
-            "📰 RSS مصادر",
-            f"{rss_count}+"
-        )
+        rss_count = 30  # Default updated count
+        if "bot_status" in st.session_state:
+            rss_count = st.session_state.bot_status.get("rss_count", 30)
+
+        st.metric("📰 RSS مصادر", f"{rss_count}+")
     with col4:
         st.metric("📝 أنواع محتوى", len(CONTENT_SCENARIOS))
 
@@ -1812,207 +1818,229 @@ with tab4:
 with tab5:
     st.markdown("## ⚙️ إعدادات النظام الكاملة")
     st.info("💡 هنا يمكنك تخصيص كل جانب من جوانب النظام - الاسم، البيانات، كل شيء!")
-    
+
     data = load_academy_data()
-    
+
     # System Branding
     with st.expander("🎨 العلامة التجارية (النظام)", expanded=True):
         col1, col2 = st.columns(2)
         with col1:
             system_name = st.text_input(
                 "اسم النظام (في الهيدر)",
-                value=data.get('system_name', '🥋 مدير أكاديمية أبطال أكتوبر'),
-                key="sys_name"
+                value=data.get("system_name", "🥋 مدير أكاديمية أبطال أكتوبر"),
+                key="sys_name",
             )
         with col2:
             system_subtitle = st.text_input(
                 "نبذة النظام (تحت الهيدر)",
-                value=data.get('system_subtitle', 'نظام ذكي لإدارة المحتوى مع توليد الصور 🖼️'),
-                key="sys_subtitle"
+                value=data.get(
+                    "system_subtitle", "نظام ذكي لإدارة المحتوى مع توليد الصور 🖼️"
+                ),
+                key="sys_subtitle",
             )
-    
+
     # Academy Info
     with st.expander("🏢 معلومات الأكاديمية الأساسية", expanded=True):
         col1, col2 = st.columns(2)
         with col1:
             academy_name = st.text_input(
                 "اسم الأكاديمية",
-                value=data.get('academy_name', ''),
-                key="set_academy_name"
+                value=data.get("academy_name", ""),
+                key="set_academy_name",
             )
             manager = st.text_input(
-                "اسم المدير",
-                value=data.get('manager', ''),
-                key="set_manager"
+                "اسم المدير", value=data.get("manager", ""), key="set_manager"
             )
             phone = st.text_input(
-                "رقم التواصل الأساسي",
-                value=data.get('phone', ''),
-                key="set_phone"
+                "رقم التواصل الأساسي", value=data.get("phone", ""), key="set_phone"
             )
             phone_alt = st.text_input(
                 "رقم التواصل البديل",
-                value=data.get('phone_alt', ''),
-                key="set_phone_alt"
+                value=data.get("phone_alt", ""),
+                key="set_phone_alt",
             )
-        
+
         with col2:
             location = st.text_area(
                 "العنوان",
-                value=data.get('location', ''),
+                value=data.get("location", ""),
                 key="set_location",
-                height=100
+                height=100,
             )
             map_link = st.text_input(
                 "رابط الخريطة (Google Maps)",
-                value=data.get('map_link', ''),
-                key="set_map"
+                value=data.get("map_link", ""),
+                key="set_map",
             )
             facebook = st.text_input(
-                "رابط الفيسبوك",
-                value=data.get('facebook', ''),
-                key="set_facebook"
+                "رابط الفيسبوك", value=data.get("facebook", ""), key="set_facebook"
             )
-    
+
     # Schedules & Pricing
     with st.expander("📅 المواعيد والأسعار", expanded=False):
         st.markdown("### إدارة الرياضات")
-        
-        current_schedules = data.get('schedules', {})
-        current_pricing = data.get('pricing', {})
-        
+
+        current_schedules = data.get("schedules", {})
+        current_pricing = data.get("pricing", {})
+
         # Add new sport
         col_new1, col_new2, col_new3 = st.columns([2, 2, 1])
         with col_new1:
             new_sport_name = st.text_input("اسم رياضة جديدة", key="new_sport_input")
         with col_new2:
-            new_sport_schedule = st.text_input("الموعد", placeholder="مثال: الأحد والثلاثاء - 4:30 م", key="new_sport_schedule")
+            new_sport_schedule = st.text_input(
+                "الموعد",
+                placeholder="مثال: الأحد والثلاثاء - 4:30 م",
+                key="new_sport_schedule",
+            )
         with col_new3:
-            new_sport_price = st.text_input("السعر", placeholder="500 جنيه", key="new_sport_price")
-        
+            new_sport_price = st.text_input(
+                "السعر", placeholder="500 جنيه", key="new_sport_price"
+            )
+
         if st.button("➕ إضافة رياضة", key="add_sport_btn"):
             if new_sport_name and new_sport_schedule and new_sport_price:
                 current_schedules[new_sport_name] = [new_sport_schedule]
                 current_pricing[new_sport_name] = new_sport_price
                 st.success(f"تمت إضافة {new_sport_name}!")
                 st.rerun()
-        
+
         st.markdown("---")
         st.markdown("### تعديل الرياضات الحالية")
-        
+
         updated_schedules = {}
         updated_pricing = {}
-        
+
         for sport in list(current_schedules.keys()):
             col1, col2, col3 = st.columns([2, 2, 1])
             with col1:
                 schedule_text = st.text_input(
                     f"موعد {sport}",
                     value=", ".join(current_schedules.get(sport, [])),
-                    key=f"schedule_{sport}"
+                    key=f"schedule_{sport}",
                 )
                 if schedule_text:
                     updated_schedules[sport] = [schedule_text]
-            
+
             with col2:
                 price_text = st.text_input(
                     f"سعر {sport}",
-                    value=current_pricing.get(sport, ''),
-                    key=f"price_{sport}"
+                    value=current_pricing.get(sport, ""),
+                    key=f"price_{sport}",
                 )
                 if price_text:
                     updated_pricing[sport] = price_text
-            
+
             with col3:
                 if st.button("�️", key=f"del_{sport}"):
                     current_schedules.pop(sport, None)
                     current_pricing.pop(sport, None)
                     st.rerun()
-    
+
     # Offers
     with st.expander("🎁 العروض الحالية", expanded=False):
-        current_offers = data.get('offers', [])
+        current_offers = data.get("offers", [])
         updated_offers = []
-        
+
         for i, offer in enumerate(current_offers):
             col1, col2 = st.columns([5, 1])
             with col1:
                 edited_offer = st.text_area(
-                    f"عرض {i+1}",
-                    value=offer,
-                    key=f"offer_edit_{i}",
-                    height=60
+                    f"عرض {i+1}", value=offer, key=f"offer_edit_{i}", height=60
                 )
                 if edited_offer:
                     updated_offers.append(edited_offer)
             with col2:
                 if st.button("🗑️", key=f"del_offer_{i}"):
                     pass  # Skip this offer
-        
+
         new_offer = st.text_area("➕ عرض جديد", key="new_offer_input", height=60)
         if new_offer:
             updated_offers.append(new_offer)
-    
+
     # Subscription Management
     with st.expander("💳 إدارة الاشتراكات والأكواد (SaaS)", expanded=False):
         st.markdown("### 🎟️ توليد أكواد الاشتراك")
         col1, col2, col3 = st.columns([2, 2, 1])
         with col1:
-            voucher_count = st.number_input("عدد الأكواد", min_value=1, max_value=1000, value=20, key="voucher_count")
+            voucher_count = st.number_input(
+                "عدد الأكواد",
+                min_value=1,
+                max_value=1000,
+                value=20,
+                key="voucher_count",
+            )
         with col2:
-            voucher_days = st.number_input("مدة الاشتراك (يوم)", min_value=1, max_value=365, value=30, key="voucher_days")
+            voucher_days = st.number_input(
+                "مدة الاشتراك (يوم)",
+                min_value=1,
+                max_value=365,
+                value=30,
+                key="voucher_days",
+            )
         with col3:
             st.markdown("**الكود السري:**")
             st.info("بلح ← طرح ← موز")
-        
+
         st.markdown("**أدخل كود المدير (3 خطوات):**")
         col_s1, col_s2, col_s3 = st.columns(3)
         with col_s1:
             step1 = st.text_input("الخطوة الأولى", placeholder="بلح", key="admin_step1")
         with col_s2:
-            step2 = st.text_input("الخطوة الثانية", placeholder="طرح", key="admin_step2")  
+            step2 = st.text_input(
+                "الخطوة الثانية", placeholder="طرح", key="admin_step2"
+            )
         with col_s3:
-            step3 = st.text_input("الخطوة الثالثة", placeholder="موز", key="admin_step3")
-        
+            step3 = st.text_input(
+                "الخطوة الثالثة", placeholder="موز", key="admin_step3"
+            )
+
         if st.button("🎫 توليد الأكواد", type="primary", key="gen_vouchers_btn"):
             if not step1 or not step2 or not step3:
                 st.error("يجب إدخال الخطوات الثلاث للكود السري!")
             else:
                 try:
                     import requests
+
                     response = requests.post(
                         "http://localhost:5000/gen-vouchers",
                         json={
                             "step1": step1,
-                            "step2": step2, 
+                            "step2": step2,
                             "step3": step3,
                             "count": voucher_count,
-                            "duration_days": voucher_days
+                            "duration_days": voucher_days,
                         },
-                        timeout=10
+                        timeout=10,
                     )
                     if response.status_code == 200:
                         result = response.json()
-                        st.success(f"✅ تم توليد {result['count']} كود لمدة {result['duration_days']} يوم")
-                        
+                        st.success(
+                            f"✅ تم توليد {result['count']} كود لمدة {result['duration_days']} يوم"
+                        )
+
                         # Display codes in a downloadable format
                         codes_text = "\n".join(result["codes"])
                         st.download_button(
                             "📥 تحميل الأكواد",
                             data=codes_text,
                             file_name=f"vouchers_{voucher_count}_{voucher_days}days.txt",
-                            mime="text/plain"
+                            mime="text/plain",
                         )
-                        
+
                         # Display codes
                         with st.expander("👀 عرض الأكواد", expanded=False):
                             st.code(codes_text, language="text")
                     else:
-                        error_data = response.json() if response.content else {"message": response.text}
+                        error_data = (
+                            response.json()
+                            if response.content
+                            else {"message": response.text}
+                        )
                         st.error(f"❌ {error_data.get('message', 'خطأ في التوليد')}")
                 except Exception as e:
                     st.error(f"❌ خطأ في الاتصال: {str(e)}")
-        
+
         st.markdown("---")
         st.markdown("### 🔑 تفعيل اشتراك")
         col1, col2, col3 = st.columns([2, 2, 1])
@@ -2027,23 +2055,34 @@ with tab5:
                 else:
                     try:
                         import requests
+
                         response = requests.post(
                             "http://localhost:5000/activate",
                             json={"user_id": activate_user_id, "code": activate_code},
-                            timeout=10
+                            timeout=10,
                         )
                         if response.status_code == 200:
                             result = response.json()
                             if result["status"] == "activated":
-                                st.success(f"✅ تم تفعيل الاشتراك حتى: {result['subscription_end']}")
+                                st.success(
+                                    f"✅ تم تفعيل الاشتراك حتى: {result['subscription_end']}"
+                                )
                             else:
-                                st.error(f"❌ {result.get('message', 'خطأ في التفعيل')}")
+                                st.error(
+                                    f"❌ {result.get('message', 'خطأ في التفعيل')}"
+                                )
                         else:
-                            error_data = response.json() if response.content else {"message": response.text}
-                            st.error(f"❌ {error_data.get('message', 'خطأ في التفعيل')}")
+                            error_data = (
+                                response.json()
+                                if response.content
+                                else {"message": response.text}
+                            )
+                            st.error(
+                                f"❌ {error_data.get('message', 'خطأ في التفعيل')}"
+                            )
                     except Exception as e:
                         st.error(f"❌ خطأ في الاتصال: {str(e)}")
-        
+
         st.markdown("---")
         st.markdown("### 📊 فحص حالة الاشتراك")
         col1, col2 = st.columns([3, 1])
@@ -2056,28 +2095,31 @@ with tab5:
                 else:
                     try:
                         import requests
+
                         response = requests.get(
                             f"http://localhost:5000/subscription-status?user_id={check_user_id}",
-                            timeout=10
+                            timeout=10,
                         )
                         if response.status_code == 200:
                             result = response.json()
                             if result["active"]:
-                                st.success(f"✅ الاشتراك نشط حتى: {result.get('subscription_end', 'غير محدد')}")
+                                st.success(
+                                    f"✅ الاشتراك نشط حتى: {result.get('subscription_end', 'غير محدد')}"
+                                )
                             else:
                                 st.warning("⚠️ الاشتراك غير نشط أو منتهي الصلاحية")
                         else:
                             st.error(f"❌ خطأ في الفحص: {response.text}")
                     except Exception as e:
                         st.error(f"❌ خطأ في الاتصال: {str(e)}")
-    
+
     # Save Button
     st.markdown("---")
     if st.button("💾 حفظ كل الإعدادات", type="primary", use_container_width=True):
         # Merge all updates
         final_schedules = {**current_schedules, **updated_schedules}
         final_pricing = {**current_pricing, **updated_pricing}
-        
+
         complete_data = {
             "system_name": system_name,
             "system_subtitle": system_subtitle,
@@ -2091,10 +2133,10 @@ with tab5:
             "schedules": final_schedules,
             "pricing": final_pricing,
             "offers": updated_offers if updated_offers else current_offers,
-            "system_prompt": data.get('system_prompt', COACH_SYSTEM_PROMPT),
-            "content_sources": data.get('content_sources', {})
+            "system_prompt": data.get("system_prompt", COACH_SYSTEM_PROMPT),
+            "content_sources": data.get("content_sources", {}),
         }
-        
+
         save_academy_data(complete_data)
         st.success("✅ تم حفظ جميع الإعدادات بنجاح!")
         st.balloons()
@@ -2107,7 +2149,7 @@ with tab5:
 with tab6:
     st.markdown("## 🚀 دليل الإعداد الشامل للمبتدئين")
     st.markdown("اتبع الخطوات التالية لتشغيل النظام بالكامل")
-    
+
     # Quick Status Check
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -2122,11 +2164,12 @@ with tab6:
     with col4:
         imgbb_status = "✅" if IMGBB_API_KEY else "⚪"
         st.metric("ImgBB", imgbb_status)
-    
+
     st.markdown("---")
-    
+
     # Step 1: Groq API
-    st.markdown("""
+    st.markdown(
+        """
 <div class="setup-step">
     <div class="step-number">1</div>
     <div class="step-content">
@@ -2140,10 +2183,13 @@ with tab6:
         </p>
     </div>
 </div>
-    """, unsafe_allow_html=True)
-    
+    """,
+        unsafe_allow_html=True,
+    )
+
     # Step 2: Facebook
-    st.markdown("""
+    st.markdown(
+        """
 <div class="setup-step">
     <div class="step-number">2</div>
     <div class="step-content">
@@ -2158,10 +2204,13 @@ with tab6:
         </p>
     </div>
 </div>
-    """, unsafe_allow_html=True)
-    
+    """,
+        unsafe_allow_html=True,
+    )
+
     # Step 3: Streamlit Cloud
-    st.markdown("""
+    st.markdown(
+        """
 <div class="setup-step">
     <div class="step-number">3</div>
     <div class="step-content">
@@ -2177,10 +2226,13 @@ with tab6:
         </p>
     </div>
 </div>
-    """, unsafe_allow_html=True)
-    
+    """,
+        unsafe_allow_html=True,
+    )
+
     # Step 4: Render
-    st.markdown("""
+    st.markdown(
+        """
 <div class="setup-step">
     <div class="step-number">4</div>
     <div class="step-content">
@@ -2196,10 +2248,13 @@ with tab6:
         </p>
     </div>
 </div>
-    """, unsafe_allow_html=True)
-    
+    """,
+        unsafe_allow_html=True,
+    )
+
     # Step 5: UptimeRobot
-    st.markdown("""
+    st.markdown(
+        """
 <div class="setup-step">
     <div class="step-number">5</div>
     <div class="step-content">
@@ -2215,10 +2270,13 @@ with tab6:
         </p>
     </div>
 </div>
-    """, unsafe_allow_html=True)
-    
+    """,
+        unsafe_allow_html=True,
+    )
+
     # Step 6: Facebook Webhook
-    st.markdown("""
+    st.markdown(
+        """
 <div class="setup-step">
     <div class="step-number">6</div>
     <div class="step-content">
@@ -2233,56 +2291,70 @@ with tab6:
         </p>
     </div>
 </div>
-    """, unsafe_allow_html=True)
-    
+    """,
+        unsafe_allow_html=True,
+    )
+
     st.markdown("---")
-    
+
     # Quick Links Section
     st.markdown("### 🔗 روابط سريعة")
-    
+
     link_col1, link_col2, link_col3, link_col4 = st.columns(4)
-    
+
     with link_col1:
-        st.markdown("""
+        st.markdown(
+            """
 <a href="https://console.groq.com" target="_blank" class="link-card">
     <div class="icon">🤖</div>
     <h4>Groq Console</h4>
     <p>مفاتيح API للذكاء الاصطناعي</p>
 </a>
-        """, unsafe_allow_html=True)
-    
+        """,
+            unsafe_allow_html=True,
+        )
+
     with link_col2:
-        st.markdown("""
+        st.markdown(
+            """
 <a href="https://developers.facebook.com" target="_blank" class="link-card">
     <div class="icon">📘</div>
     <h4>Facebook Developers</h4>
     <p>إعداد التطبيق والـ Token</p>
 </a>
-        """, unsafe_allow_html=True)
-    
+        """,
+            unsafe_allow_html=True,
+        )
+
     with link_col3:
-        st.markdown("""
+        st.markdown(
+            """
 <a href="https://render.com" target="_blank" class="link-card">
     <div class="icon">🖥️</div>
     <h4>Render</h4>
     <p>نشر الـ Webhook</p>
 </a>
-        """, unsafe_allow_html=True)
-    
+        """,
+            unsafe_allow_html=True,
+        )
+
     with link_col4:
-        st.markdown("""
+        st.markdown(
+            """
 <a href="https://uptimerobot.com" target="_blank" class="link-card">
     <div class="icon">⏰</div>
     <h4>UptimeRobot</h4>
     <p>جدولة النشر التلقائي</p>
 </a>
-        """, unsafe_allow_html=True)
-    
+        """,
+            unsafe_allow_html=True,
+        )
+
     st.markdown("---")
-    
+
     # Secrets Template
     st.markdown("### 📝 نموذج Secrets (للنسخ)")
-    
+
     secrets_template = """# Streamlit Secrets Template
 # انسخ هذا في Advanced Settings → Secrets
 
@@ -2291,39 +2363,39 @@ PAGE_ACCESS_TOKEN = "EAAxxxxxxxxxxxxxxx"
 NVIDIA_API_KEY = "nvapi-xxxxxxxxxx"  # اختياري
 IMGBB_API_KEY = "xxxxxxxxxx"  # اختياري
 """
-    
+
     st.code(secrets_template, language="toml")
-    
+
     # Environment Variables for Render
     st.markdown("### 🔐 متغيرات البيئة لـ Render")
-    
+
     render_env = """# Environment Variables for Render
 # أضف هذه في Render Dashboard → Environment
 
 GROQ_API_KEY_4=gsk_xxxxxxxxxxxxxxxxx
 PAGE_ACCESS_TOKEN=EAAxxxxxxxxxxxxxxx
 """
-    
+
     st.code(render_env, language="bash")
-    
+
     st.markdown("---")
-    
+
     # Test Section
     st.markdown("### 🧪 اختبار الاتصال")
-    
+
     webhook_url = st.text_input(
         "رابط الـ Webhook (Render URL)",
         placeholder="https://your-app.onrender.com",
-        key="test_webhook_url"
+        key="test_webhook_url",
     )
-    
+
     col1, col2 = st.columns(2)
-    
+
     with col1:
         if st.button("🔍 فحص حالة السيرفر", use_container_width=True):
             if webhook_url:
                 try:
-                    url = webhook_url.rstrip('/') + '/status'
+                    url = webhook_url.rstrip("/") + "/status"
                     response = requests.get(url, timeout=10)
                     if response.status_code == 200:
                         data = response.json()
@@ -2335,19 +2407,23 @@ PAGE_ACCESS_TOKEN=EAAxxxxxxxxxxxxxxx
                     st.error(f"❌ فشل الاتصال: {e}")
             else:
                 st.warning("أدخل رابط الـ Webhook أولاً")
-    
+
     with col2:
         if st.button("🧪 اختبار توليد الأكواد", use_container_width=True):
             if webhook_url:
                 try:
-                    url = webhook_url.rstrip('/') + '/gen-vouchers'
-                    response = requests.post(url, json={
-                        "step1": "بلح",
-                        "step2": "طرح",
-                        "step3": "موز",
-                        "count": 1,
-                        "duration_days": 7
-                    }, timeout=10)
+                    url = webhook_url.rstrip("/") + "/gen-vouchers"
+                    response = requests.post(
+                        url,
+                        json={
+                            "step1": "بلح",
+                            "step2": "طرح",
+                            "step3": "موز",
+                            "count": 1,
+                            "duration_days": 7,
+                        },
+                        timeout=10,
+                    )
                     if response.status_code == 200:
                         st.success("✅ نظام الأكواد يعمل!")
                         st.json(response.json())
@@ -2357,33 +2433,38 @@ PAGE_ACCESS_TOKEN=EAAxxxxxxxxxxxxxxx
                     st.error(f"❌ فشل الاتصال: {e}")
             else:
                 st.warning("أدخل رابط الـ Webhook أولاً")
-    
+
     st.markdown("---")
-    
+
     # FAQ Section
     st.markdown("### ❓ الأسئلة الشائعة")
-    
+
     with st.expander("🤔 كيف أحصل على Page Access Token دائم؟"):
-        st.markdown("""
+        st.markdown(
+            """
         1. أنشئ System User في Business Manager
         2. اربطه بالصفحة مع صلاحيات كاملة
         3. ولّد Token من System User
         4. هذا التوكن لا ينتهي!
         
         [📖 دليل Facebook الرسمي](https://developers.facebook.com/docs/pages/access-tokens)
-        """)
-    
+        """
+        )
+
     with st.expander("🔄 السيرفر على Render ينام - ماذا أفعل؟"):
-        st.markdown("""
+        st.markdown(
+            """
         الخطة المجانية على Render تنام بعد 15 دقيقة من عدم النشاط.
         
         **الحل:**
         - استخدم UptimeRobot لإرسال طلب كل 14 دقيقة
         - أو قم بالترقية لخطة مدفوعة ($7/شهر)
-        """)
-    
+        """
+        )
+
     with st.expander("💡 كيف أغير كود المدير الثلاثي؟"):
-        st.markdown("""
+        st.markdown(
+            """
         الكود الافتراضي: `بلح` → `طرح` → `موز`
         
         لتغييره، عدل في ملف `webhook.py`:
@@ -2392,14 +2473,17 @@ PAGE_ACCESS_TOKEN=EAAxxxxxxxxxxxxxxx
         ```
         
         غير الكلمات للي تحبها وارفع التحديث.
-        """)
-    
+        """
+        )
+
     with st.expander("📱 التطبيق لا يظهر بشكل صحيح على الموبايل؟"):
-        st.markdown("""
+        st.markdown(
+            """
         - تأكد من استخدام أحدث نسخة من الكود
         - جرب مسح cache المتصفح
         - استخدم Chrome أو Safari للحصول على أفضل تجربة
-        """)
+        """
+        )
 
 # --- Footer ---
 st.markdown("---")

@@ -439,6 +439,24 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+
+def _get_query_param(name: str):
+    try:
+        value = st.query_params.get(name)
+    except Exception:
+        return None
+    if isinstance(value, list):
+        return value[0] if value else None
+    return value
+
+
+# Secret entry point (fallback): open main app with ?sg=1 then it will jump to the gate page.
+if _get_query_param("sg") == "1":
+    try:
+        st.switch_page("pages/secret_gate.py")
+    except Exception:
+        st.info("تم تفعيل وضع البوابة، لكن إصدار Streamlit لا يدعم التنقل التلقائي هنا.")
+
 # --- Premium UI/UX CSS ---
 st.markdown(
     """

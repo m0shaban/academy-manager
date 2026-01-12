@@ -231,7 +231,7 @@ def reset_gates():
 st.markdown("""
 <div class="gate-box">
     <h2>🏰 البوابة السرية للأكواد 🏰</h2>
-    <p>4 بوابات أمان يجب اختراقها للوصول لغرفة الكنز!</p>
+    <p>4 بوابات… والأسئلة كلها تمويه (الإجابات مش باينة خالص).</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -242,13 +242,13 @@ if not st.session_state.gate1_passed:
     st.markdown("""
     <div class="locked-gate">
         <h3>🚪 البوابة الأولى</h3>
-        <p>قل الكلمة السحرية لعلي بابا...</p>
+        <p>سؤال تمويهي رقم 1: اكتب اسم أول مدرس انت حبيته (من غير مسافات).</p>
     </div>
     """, unsafe_allow_html=True)
     
-    gate1_input = st.text_input("🗝️ الكلمة السحرية:", type="password", key="gate1", placeholder="افتح يا...")
+    gate1_input = st.text_input("🗝️ إجابتك:", type="password", key="gate1", placeholder="(الإجابة مش اللي انت فاكره)")
     
-    col1, col2 = st.columns([3, 1])
+    col1, col2 = st.columns([4, 1])
     with col1:
         if st.button("🚀 فتح البوابة الأولى", key="btn_gate1", use_container_width=True):
             if gate1_input == "سمسم":
@@ -258,8 +258,8 @@ if not st.session_state.gate1_passed:
             else:
                 st.error("❌ أممم... علي بابا غير موافق!")
     with col2:
-        if st.button("💡", key="hint1"):
-            st.info("💡 تلميح: علي بابا كان بيقول 'افتح يا ___'")
+        if st.button("🕵️", key="hint1"):
+            st.info("تمويه: لا يوجد تلميحات… جرّب تفتكر بس.")
 
 # ========== GATE 2: بلح ==========
 elif not st.session_state.gate2_passed:
@@ -272,13 +272,13 @@ elif not st.session_state.gate2_passed:
     st.markdown("""
     <div class="locked-gate">
         <h3>🚪 البوابة الثانية</h3>
-        <p>🌴 فاكهة من النخل، حلوة وبنية...</p>
+        <p>سؤال تمويهي رقم 2: اكتب اسم أول لعبة على موبايلك (3 حروف بالضبط).</p>
     </div>
     """, unsafe_allow_html=True)
     
-    gate2_input = st.text_input("🌴 اسم الفاكهة:", key="gate2", placeholder="فاكهة من النخل...")
+    gate2_input = st.text_input("🧩 إجابتك:", key="gate2", placeholder="(سؤال تمويه)")
     
-    col1, col2 = st.columns([3, 1])
+    col1, col2 = st.columns([4, 1])
     with col1:
         if st.button("🚀 فتح البوابة الثانية", key="btn_gate2", use_container_width=True):
             if gate2_input == "بلح":
@@ -288,8 +288,8 @@ elif not st.session_state.gate2_passed:
             else:
                 st.error("❌ لأ مش دي... فكر في النخل!")
     with col2:
-        if st.button("💡", key="hint2"):
-            st.info("💡 تلميح: ب___ (3 حروف)")
+        if st.button("🕵️", key="hint2"):
+            st.info("تمويه: لو السؤال واضح يبقى كده مش تمويه.")
 
 # ========== GATE 3: طرح ==========
 elif not st.session_state.gate3_passed:
@@ -302,13 +302,13 @@ elif not st.session_state.gate3_passed:
     st.markdown("""
     <div class="locked-gate">
         <h3>🚪 البوابة الثالثة</h3>
-        <p>➖ عملية حسابية عكس الجمع...</p>
+        <p>سؤال تمويهي رقم 3: اكتب اسم كارتون قديم (من غير مسافات).</p>
     </div>
     """, unsafe_allow_html=True)
     
-    gate3_input = st.text_input("➖ اسم العملية:", key="gate3", placeholder="عكس الجمع...")
+    gate3_input = st.text_input("🧩 إجابتك:", key="gate3", placeholder="(سؤال تمويه)")
     
-    col1, col2 = st.columns([3, 1])
+    col1, col2 = st.columns([4, 1])
     with col1:
         if st.button("🚀 فتح البوابة الثالثة", key="btn_gate3", use_container_width=True):
             if gate3_input == "طرح":
@@ -318,8 +318,8 @@ elif not st.session_state.gate3_passed:
             else:
                 st.error("❌ لأ... 5 - 3 = ؟ العملية دي اسمها إيه؟")
     with col2:
-        if st.button("💡", key="hint3"):
-            st.info("💡 تلميح: ط___ (3 حروف)")
+        if st.button("🕵️", key="hint3"):
+            st.info("تمويه: مفيش تلميح… البوابة بتحب الغموض.")
 
 # ========== GATE 4: موز ==========
 elif not st.session_state.gate4_passed:
@@ -332,13 +332,13 @@ elif not st.session_state.gate4_passed:
     st.markdown("""
     <div class="locked-gate">
         <h3>🚪 البوابة الأخيرة</h3>
-        <p>🍌 فاكهة صفراء بياكلها القرود...</p>
+        <p>سؤال تمويهي رقم 4: اكتب اسم أكلة مفضلة (3 حروف).</p>
     </div>
     """, unsafe_allow_html=True)
     
-    gate4_input = st.text_input("🍌 اسم الفاكهة:", key="gate4", placeholder="القرود بتحبها...")
+    gate4_input = st.text_input("🧩 إجابتك:", key="gate4", placeholder="(سؤال تمويه)")
     
-    col1, col2 = st.columns([3, 1])
+    col1, col2 = st.columns([4, 1])
     with col1:
         if st.button("🚀 فتح البوابة الأخيرة!", key="btn_gate4", use_container_width=True):
             if gate4_input == "موز":
@@ -350,8 +350,8 @@ elif not st.session_state.gate4_passed:
             else:
                 st.error("❌ القرد زعل منك! 🐵")
     with col2:
-        if st.button("💡", key="hint4"):
-            st.info("💡 تلميح: م___ (3 حروف) 🍌")
+        if st.button("🕵️", key="hint4"):
+            st.info("تمويه: التلميح الحقيقي إن مفيش تلميح.")
 
 # ========== ALL GATES PASSED - VOUCHER GENERATION ==========
 else:

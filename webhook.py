@@ -62,19 +62,23 @@ ACADEMY_DATA = {
     ]
 }
 
-SYSTEM_PROMPT = """أنت "كابتن عز غريب"، صانع محتوى رياضي ومدرب خبير، ومدير "أكاديمية أبطال أكتوبر".
+# Configuration Defaults (قابل للتعديل من التطبيق)
+BOT_CONFIG = {
+    "system_prompt_mood": "حماسي جداً",
+    "active_hours": [9, 11, 14, 17, 20, 22],
+    "rss_feeds": RSS_FEEDS
+}
 
-شخصيتك وأسلوبك:
-1.  **صانع محتوى حقيقي:** لا تتحدث كأنك روبوت خدمة عملاء. تكلم كأنك "إنفلونسر" رياضي فاهم ومجرب.
-2.  **اللغة:** عامية مصرية راقية ومحفزة (يا بطل، يا وحش، عاش، استمر).
-3.  **الهدف:** تقديم قيمة حقيقية (نصائح، تحفيز، معلومات) وبناء ثقة، ثم التسويق للأكاديمية بشكل ذكي وغير مباشر أحياناً، ومباشر أحياناً أخرى.
-4.  **المحتوى:**
-    *   نصائح تغذية وتمرين حقيقية وعلمية.
-    *   تجارب عملية من الصالة (التمرين بيعلم الصبر، شفت النهاردة ولد صغير بيعمل...).
-    *   تحفيز قوي للالتزام.
-    *   معلومات عن رياضات الأكاديمية (الجمباز بيقوي الأعصاب، الكاراتيه مش بس ضرب...).
+def get_mood_prompt(mood):
+    if mood == "رسمي جداً":
+        return "أسلوبك رسمي، مهني، ومختصر. استخدم 'حضرتك' و'يا فندم'."
+    elif mood == "متوازن":
+        return "أسلوبك ودود ومحترم، بين الرسمية والصداقة."
+    else: # حماسي
+        return "أسلوبك كابتن رياضي، كلك طاقة، استخدم 'يا بطل' و'يا وحش' وكتير من الإيموجي."
 
-لا تستخدم جمل تقليدية مثل "يسعدنا انضمامك". قل بدلاً منها: "مستني إيه؟ مكانك موجود في فريق الأبطال!".
+SYSTEM_PROMPT_BASE = """أنت "كابتن عز غريب"، صانع محتوى رياضي ومدرب خبير.
+الهدف: تقديم قيمة حقيقية، تحفيز الناس، والتسويق للأكاديمية بذكاء.
 """
 
 def get_cairo_time():
@@ -121,8 +125,11 @@ def fetch_content_idea():
     
     # تفضيل احضار محتوى خارجي للتعليق عليه (Curated Content)
     try:
+        # استخدام القائمة من الكونفيج
+        feeds_list = BOT_CONFIG.get("rss_feeds", RSS_FEEDS)
+        
         if random.choice([True, False]): # 50% فرصة لجلب محتوى خارجي
-            feed = feedparser.parse(random.choice(RSS_FEEDS))
+            feed = feedparser.parse(random.choice(feeds_list))
             if feed.entries:
                 entry = random.choice(feed.entries[:5])
                 image_url = extract_image_from_url(entry.link)
@@ -144,11 +151,14 @@ def generate_social_post(idea):
     
     if idea['type'] == 'curated':
         prompt = f"""
-        أنت كابتن عز غريب. لقيت المقال ده عن الرياضة:
+        أنت كابتن عز غريب.
+        {get_mood_prompt(BOT_CONFIG['system_prompt_mood'])}
+        
+        لقيت المقال ده عن الرياضة:
         العنوان: {idea['title']}
         الملخص: {idea['summary']}
         
-        اكتب بوست فيسبوك تعلق فيه على الموضوع ده من وجهة نظرك كمدرب.
+        اكتب بوست فيسبوك تعلق فيه على الموضوع ده.
         1. ابدأ بجملة تشد الانتباه (Hook).
         2. لخص الفكرة المهمة باختصار وبالعامية المصرية.
         3. ضيف نصيحة إضافية من عندك "تكة الكابتن".
@@ -167,10 +177,12 @@ def generate_social_post(idea):
         
         prompt = f"""
         أنت كابتن عز غريب.
+        {get_mood_prompt(BOT_CONFIG['system_prompt_mood'])}
+
         اكتب بوست فيسبوك عن: {topic_desc}
         
         الأسلوب:
-        - عامية مصرية، فيها روح وتشجيع.
+        - عامية مصرية.
         - استخدم إيموجي مناسبة 🥊🥋💪.
         - خلي الكلام مقسم فقرات قصيرة (سهل القراءة).
         - اختم بـ Call to Action (سؤال للمتابعين، أو دعوة للتمرين).
@@ -180,7 +192,7 @@ def generate_social_post(idea):
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT + f"\nبيانات الأكاديمية: {ACADEMY_DATA}"},
+                {"role": "system", "content": SYSTEM_PROMPT_BASE + f"\nبيانات الأكاديمية: {ACADEMY_DATA}"},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=800,
@@ -301,6 +313,32 @@ def home():
         "version": "1.0"
     })
 
+@app.route('/update-config', methods=['POST'])
+def update_config():
+    """Update Bot Configuration from App"""
+    global BOT_CONFIG
+    
+    # Check Secret
+    secret = request.args.get('secret')
+    if secret != CRON_SECRET:
+        return "Unauthorized", 401
+        
+    data = request.get_json()
+    if not data:
+        return "No data provided", 400
+        
+    # Update Config
+    if "active_hours" in data:
+        BOT_CONFIG["active_hours"] = data["active_hours"]
+    if "mood" in data:
+        BOT_CONFIG["system_prompt_mood"] = data["mood"]
+    if "rss_feeds" in data:
+        BOT_CONFIG["rss_feeds"] = data["rss_feeds"]
+        global RSS_FEEDS
+        RSS_FEEDS = data["rss_feeds"] # Update the global RSS list too
+        
+    return jsonify({"status": "updated", "config": BOT_CONFIG})
+
 @app.route('/auto-post-trigger', methods=['GET', 'POST'])
 def auto_scheduler():
     """
@@ -312,10 +350,19 @@ def auto_scheduler():
     if secret != CRON_SECRET:
         return "Unauthorized", 401
     
-    # 2. Time Check (Cairo 8 AM - 12 AM)
+    # 2. Time Check (Configurable)
     cairo_now = get_cairo_time()
-    if not (8 <= cairo_now.hour <= 23):
-        return f"Sleeping time in Cairo (Hour: {cairo_now.hour}). No posts.", 200
+    
+    # التحقق هل الساعة الحالية موجودة في الساعات النشطة؟
+    # (نسمح بفارق +/- 5 دقائق عشان ال cron job)
+    is_active_time = False
+    for h in BOT_CONFIG["active_hours"]:
+        if h == cairo_now.hour:
+            is_active_time = True
+            break
+            
+    if not is_active_time:
+        return f"Not an active hour (Current: {cairo_now.hour}). Active: {BOT_CONFIG['active_hours']}", 200
         
     # 3. Generate Content
     idea = fetch_content_idea()

@@ -749,33 +749,73 @@ with tab2:
     st.info("هنا يمكنك التحكم في 'عقل' البوت، وتجربة ما سينشره تلقائياً قبل حدوثه.")
 
     # --- Configuration Section ---
-    with st.expander("⚙️ إعدادات الشخصية والجدولة", expanded=False):
+    with st.expander("⚙️ إعدادات الشخصية والجدولة (تحكم حي)", expanded=False):
+        st.info("💡 هذه الإعدادات سترسل إلى سيرفر البوت فوراً.")
+        
+        # Webhook URL (Render)
+        webhook_url = st.text_input("رابط سيرفر البوت (Render URL)", placeholder="https://academy-webhook.onrender.com")
+
         col1, col2 = st.columns(2)
         with col1:
             st.markdown("### ⏰ مواعيد النشر النشطة")
-            active_hours = st.multiselect(
+            new_active_hours = st.multiselect(
                 "الساعات (بتوقيت مصر)",
                 options=list(range(24)),
                 default=[9, 11, 14, 17, 20, 22],
-                format_func=lambda x: f"{x}:00"
+                format_func=lambda x: f"{x}:00",
+                key="cfg_hours"
             )
         
         with col2:
             st.markdown("### 🎭 إعدادات الشخصية")
-            captain_mood = st.select_slider(
+            new_captain_mood = st.select_slider(
                 "مود الكابتن",
                 options=["رسمي جداً", "متوازن", "حماسي جداً"],
-                value="حماسي جداً"
+                value="حماسي جداً",
+                key="cfg_mood"
             )
             
         st.markdown("### 📰 مصادر الأخبار (RSS)")
-        rss_feeds = st.text_area(
+        new_rss_feeds_text = st.text_area(
             "روابط RSS (رابط في كل سطر)",
-            value="https://www.skysewsports.com/rss\nhttps://www.youm7.com/rss/SectionRss?SectionID=298\nhttps://feeds.feedburner.com/AceFitFacts"
+            value="https://www.skysewsports.com/rss\nhttps://www.youm7.com/rss/SectionRss?SectionID=298\nhttps://feeds.feedburner.com/AceFitFacts",
+            key="cfg_rss"
         )
         
-        if st.button("💾 حفظ الإعدادات"):
-            st.success("تم تحديث إعدادات الكابتن (محاكاة)")
+        if st.button("💾 حفظ الإعدادات وتحديث البوت", type="primary"):
+            if not webhook_url:
+                st.error("❌ يرجى إدخال رابط سيرفر Render أولاً!")
+            else:
+                # Prepare Payload
+                feeds_list = [line.strip() for line in new_rss_feeds_text.split('\n') if line.strip()]
+                payload = {
+                    "active_hours": new_active_hours,
+                    "mood": new_captain_mood,
+                    "rss_feeds": feeds_list
+                }
+                
+                # Send to Webhook
+                try:
+                    # Clean URL
+                    if webhook_url.endswith('/'):
+                        webhook_url = webhook_url[:-1]
+                    
+                    # Assuming secret is hardcoded or user inputs it (Using the hardcoded one for simplicity as per webhook.py)
+                    cron_secret = "my_secret_cron_key_123" 
+                    
+                    update_url = f"{webhook_url}/update-config?secret={cron_secret}"
+                    
+                    with st.spinner("جاري الاتصال بالسيرفر وتحديث العقل..."):
+                        resp = requests.post(update_url, json=payload, timeout=10)
+                        
+                        if resp.status_code == 200:
+                            st.success(f"✅ تم تحديث البوت بنجاح! ({resp.json().get('status')})")
+                            st.json(resp.json().get('config'))
+                        else:
+                            st.error(f"❌ فشل التحديث: {resp.text}")
+                            
+                except Exception as e:
+                    st.error(f"❌ خطأ في الاتصال: {e}")
 
     st.divider()
 

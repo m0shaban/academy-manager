@@ -480,12 +480,13 @@ def _get_query_param(name: str):
     return value
 
 
-# Secret entry point (fallback): open main app with ?sg=1 then it will jump to the gate page.
+# Secret entry point (professional & compatible): render gate inline when ?sg=1
 if _get_query_param("sg") == "1":
-    try:
-        st.switch_page("pages/secret_gate.py")
-    except Exception:
-        st.info("تم تفعيل وضع البوابة، لكن إصدار Streamlit لا يدعم التنقل التلقائي هنا.")
+    from secret_gate_ui import render_secret_gate
+
+    BACKEND_URL = st.secrets.get("BACKEND_URL", "https://your-render-app.onrender.com")
+    render_secret_gate(BACKEND_URL, standalone=False)
+    st.stop()
 
 # --- Premium UI/UX CSS ---
 st.markdown(

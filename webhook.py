@@ -17,6 +17,11 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY_4")
 PAGE_ACCESS_TOKEN = os.environ.get("PAGE_ACCESS_TOKEN")
 VERIFY_TOKEN = "academy_webhook_2026"
 CRON_SECRET = "my_secret_cron_key_123"  # حماية للرابط عشان محدش غيرك يشغله
+ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")  # حماية احترافية لتوليد الأكواد (Header)
+
+# بسيط ومفيد ضد التخمين (in-memory). مناسب لـ Render single instance.
+_GEN_FAILS = {}
+_GEN_BLOCKED_UNTIL = {}
 
 # Initialize Groq
 client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
@@ -545,24 +550,40 @@ def update_config():
 
 @app.route("/gen-vouchers", methods=["POST"])
 def gen_vouchers():
-    """Generate voucher codes with special admin authorization sequence"""
+    """Generate voucher codes (admin-only).
+
+    Professional security: require ADMIN_TOKEN via X-Admin-Token header (if configured).
+    UI gates are NOT considered security.
+    """
+    ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or request.remote_addr or "unknown"
+    now_ts = datetime.utcnow().timestamp()
+
+    blocked_until = _GEN_BLOCKED_UNTIL.get(ip)
+    if blocked_until and now_ts < blocked_until:
+        return jsonify({"status": "error", "message": "تم حظر المحاولات مؤقتاً"}), 429
+
     data = request.get_json() or {}
 
-    # Special admin code verification sequence
-    step1 = data.get("step1")
-    step2 = data.get("step2")
-    step3 = data.get("step3")
-
-    if step1 != "بلح" or step2 != "طرح" or step3 != "موز":
-        return (
-            jsonify(
-                {
-                    "status": "error",
-                    "message": "كود المدير غير صحيح - تأكد من الخطوات الثلاث",
-                }
-            ),
-            401,
-        )
+    # Preferred: ADMIN_TOKEN header
+    if ADMIN_TOKEN:
+        provided = request.headers.get("X-Admin-Token", "")
+        if not provided or provided != ADMIN_TOKEN:
+            # track failures
+            window = _GEN_FAILS.get(ip)
+            if not window or now_ts - window["first_ts"] > 600:
+                window = {"first_ts": now_ts, "count": 0}
+            window["count"] += 1
+            _GEN_FAILS[ip] = window
+            if window["count"] >= 5:
+                _GEN_BLOCKED_UNTIL[ip] = now_ts + 1800  # 30 min
+            return jsonify({"status": "error", "message": "غير مصرح"}), 403
+    else:
+        # Legacy fallback (only when ADMIN_TOKEN is not configured)
+        step1 = data.get("step1")
+        step2 = data.get("step2")
+        step3 = data.get("step3")
+        if step1 != "بلح" or step2 != "طرح" or step3 != "موز":
+            return jsonify({"status": "error", "message": "غير مصرح"}), 401
 
     count = int(data.get("count", 20))
     duration = int(data.get("duration_days", 30))

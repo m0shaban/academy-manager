@@ -751,6 +751,7 @@ with tab1:
                 )
                 fb_img = random.choice(FALLBACK_IMAGES)
                 st.session_state.image_url = fb_img
+                st.session_state.post_text = post_text # Save the text!
                 st.image(fb_img, caption="صورة احتياطية (من المجموعة)", width=300)
 
             progress.progress(100)

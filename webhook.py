@@ -69,6 +69,9 @@ BOT_CONFIG = {
     "rss_feeds": RSS_FEEDS
 }
 
+# ذاكرة مؤقتة لمنع التكرار في نفس الساعة
+LAST_POST_HOUR_KEY = None
+
 def get_mood_prompt(mood):
     if mood == "رسمي جداً":
         return "أسلوبك رسمي، مهني، ومختصر. استخدم 'حضرتك' و'يا فندم'."
@@ -353,17 +356,21 @@ def auto_scheduler():
     
     # 2. Time Check (Configurable)
     cairo_now = get_cairo_time()
+    current_hour_key = cairo_now.strftime("%Y-%m-%d-%H")
+    
+    global LAST_POST_HOUR_KEY
     
     # التحقق هل الساعة الحالية موجودة في الساعات النشطة؟
-    # (نسمح بفارق +/- 5 دقائق عشان ال cron job)
     is_active_time = False
-    for h in BOT_CONFIG["active_hours"]:
-        if h == cairo_now.hour:
-            is_active_time = True
-            break
+    if cairo_now.hour in BOT_CONFIG["active_hours"]:
+        is_active_time = True
             
     if not is_active_time:
         return f"Not an active hour (Current: {cairo_now.hour}). Active: {BOT_CONFIG['active_hours']}", 200
+    
+    # منع التكرار: لو نشرنا بالفعل في هذه الساعة، لا تنشر مرة أخرى
+    if LAST_POST_HOUR_KEY == current_hour_key:
+        return f"Already posted this hour ({current_hour_key}). Skipping.", 200
         
     # 3. Generate Content
     idea = fetch_content_idea()
@@ -372,6 +379,11 @@ def auto_scheduler():
     if post_text:
         # 4. Publish
         result = publish_to_facebook(post_text, idea.get('image_url'))
+        
+        # تحديث وقت آخر نشر بعد النجاح
+        if "Successfully" in str(result) or "id" in str(result):
+            LAST_POST_HOUR_KEY = current_hour_key
+            
         return jsonify({
             "status": "success",
             "time": str(cairo_now),

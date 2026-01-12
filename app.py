@@ -492,6 +492,30 @@ html, body, .stApp {
     visibility: hidden;
 }
 
+/* Hide pages from sidebar navigation */
+[data-testid="stSidebarNav"] {
+    display: none !important;
+}
+
+/* Fix text overlap - RTL spacing */
+h1, h2, h3, h4, h5, h6, p, span, label, div {
+    line-height: 1.8 !important;
+    letter-spacing: 0.3px !important;
+}
+
+/* Fix keyboard/text overlap in inputs */
+.stTextInput label, .stNumberInput label, .stSelectbox label, .stTextArea label {
+    margin-bottom: 8px !important;
+    display: block !important;
+    font-weight: 600 !important;
+}
+
+/* Fix expander text overlap */
+[data-testid="stExpander"] summary span {
+    line-height: 1.6 !important;
+    word-spacing: 2px !important;
+}
+
 /* ===== HERO HEADER ===== */
 .hero-header {
     background: var(--gradient-1);

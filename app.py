@@ -1450,17 +1450,33 @@ with tab5:
         with col2:
             voucher_days = st.number_input("مدة الاشتراك (يوم)", min_value=1, max_value=365, value=30, key="voucher_days")
         with col3:
-            secret_key = st.text_input("مفتاح المدير", type="password", key="admin_secret")
+            st.markdown("**الكود السري:**")
+            st.info("بلح ← طرح ← موز")
+        
+        st.markdown("**أدخل كود المدير (3 خطوات):**")
+        col_s1, col_s2, col_s3 = st.columns(3)
+        with col_s1:
+            step1 = st.text_input("الخطوة الأولى", placeholder="بلح", key="admin_step1")
+        with col_s2:
+            step2 = st.text_input("الخطوة الثانية", placeholder="طرح", key="admin_step2")  
+        with col_s3:
+            step3 = st.text_input("الخطوة الثالثة", placeholder="موز", key="admin_step3")
         
         if st.button("🎫 توليد الأكواد", type="primary", key="gen_vouchers_btn"):
-            if not secret_key:
-                st.error("مفتاح المدير مطلوب!")
+            if not step1 or not step2 or not step3:
+                st.error("يجب إدخال الخطوات الثلاث للكود السري!")
             else:
                 try:
                     import requests
                     response = requests.post(
-                        f"http://localhost:5000/gen-vouchers?secret={secret_key}",
-                        json={"count": voucher_count, "duration_days": voucher_days},
+                        "http://localhost:5000/gen-vouchers",
+                        json={
+                            "step1": step1,
+                            "step2": step2, 
+                            "step3": step3,
+                            "count": voucher_count,
+                            "duration_days": voucher_days
+                        },
                         timeout=10
                     )
                     if response.status_code == 200:
@@ -1480,7 +1496,8 @@ with tab5:
                         with st.expander("👀 عرض الأكواد", expanded=False):
                             st.code(codes_text, language="text")
                     else:
-                        st.error(f"❌ خطأ: {response.text}")
+                        error_data = response.json() if response.content else {"message": response.text}
+                        st.error(f"❌ {error_data.get('message', 'خطأ في التوليد')}")
                 except Exception as e:
                     st.error(f"❌ خطأ في الاتصال: {str(e)}")
         

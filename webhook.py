@@ -545,16 +545,24 @@ def update_config():
 
 @app.route("/gen-vouchers", methods=["POST"])
 def gen_vouchers():
-    secret = request.args.get("secret")
-    if secret != CRON_SECRET:
-        return "Unauthorized", 401
-
+    """Generate voucher codes with special admin authorization sequence"""
     data = request.get_json() or {}
+    
+    # Special admin code verification sequence
+    step1 = data.get("step1")
+    step2 = data.get("step2") 
+    step3 = data.get("step3")
+    
+    if step1 != "بلح" or step2 != "طرح" or step3 != "موز":
+        return jsonify({"status": "error", "message": "كود المدير غير صحيح - تأكد من الخطوات الثلاث"}), 401
+    
     count = int(data.get("count", 20))
     duration = int(data.get("duration_days", 30))
 
     codes = generate_vouchers(count=count, duration_days=duration)
-    return jsonify({"status": "ok", "count": len(codes), "duration_days": duration, "codes": codes})
+    return jsonify(
+        {"status": "ok", "count": len(codes), "duration_days": duration, "codes": codes}
+    )
 
 
 @app.route("/activate", methods=["POST"])
@@ -593,7 +601,13 @@ def subscription_status():
     conn.close()
     expiry = row[0] if row and row[0] else None
 
-    return jsonify({"status": "active" if active else "expired", "active": active, "subscription_end": expiry})
+    return jsonify(
+        {
+            "status": "active" if active else "expired",
+            "active": active,
+            "subscription_end": expiry,
+        }
+    )
 
 
 @app.route("/auto-post-trigger", methods=["GET", "POST"])
@@ -712,9 +726,9 @@ def handle_webhook():
 
                         # Reply to comment
                         if response:
-                             reply_to_comment(comment_id, response)
+                            reply_to_comment(comment_id, response)
                         else:
-                             print("❌ Failed to generate response for comment")
+                            print("❌ Failed to generate response for comment")
 
     return "OK", 200
 

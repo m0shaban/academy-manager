@@ -20,7 +20,19 @@ CRON_SECRET = "my_secret_cron_key_123" # حماية للرابط عشان محد
 client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
 
 # الثوابت والصور
-DEFAULT_IMAGE = "https://i.ibb.co/xKGpF5sQ/469991854-122136396014386621-3832266993418146234-n.jpg"
+FALLBACK_IMAGES = [
+    "https://i.ibb.co/xKGpF5sQ/469991854-122136396014386621-3832266993418146234-n.jpg", # Captain Ezz
+    "https://images.unsplash.com/photo-1555597673-b21d5c935865?fm=jpg", # Karate Kid
+    "https://images.unsplash.com/photo-1516684991026-4c3032a2b4fd?fm=jpg", # Martial Arts Training
+    "https://images.unsplash.com/photo-1607031767898-5f319512ff1e?fm=jpg", # Taekwondo Kick
+    "https://images.unsplash.com/photo-1738835935023-ebff4a85bc7e?fm=jpg", # Kung Fu Pose
+    "https://images.unsplash.com/photo-1617627590804-1de3424fbf04?fm=jpg", # Boxing Gloves
+    "https://images.unsplash.com/photo-1764622078672-20f2cf5fcbc1?fm=jpg", # Gymnastics Balance
+    "https://images.unsplash.com/photo-1711825044889-371d0cdf5fe1?fm=jpg", # Focus & Discipline
+    "https://images.unsplash.com/photo-1699464676033-150f72c9f030?fm=jpg", # Group Training
+    "https://images.unsplash.com/photo-1616447285757-3d0084ebd43b?fm=jpg", # Fitness
+    "https://images.unsplash.com/photo-1764622078439-245a43822a5c?fm=jpg"  # Active Kids
+]
 
 # RSS Feeds for Sports & Health Content
 RSS_FEEDS = [
@@ -28,24 +40,40 @@ RSS_FEEDS = [
     "https://feeds.feedburner.com/karatemart",
     "https://kaizenfitnessusa.com/blog?format=rss",
     "https://karateoc.com/feed",
+    "https://www.karatebyjesse.com/feed/", 
     
-    # Kung Fu
-    "https://kungfu.kids/blog/feed", # Assuming standard WP feed structure if not provided
+    # Kung Fu & Martial Arts General
+    "https://kungfu.kids/blog/feed",
     "https://smabloggers.com/tag/kung-fu/feed", 
+    "https://blackbeltmag.com/feed",
+    "https://ymaa.com/publishing/articles/feed",
+    "https://blog.centuryma.com/rss.xml",
+    "https://martialartsteachers.com/feed/",
     
-    # Kickboxing
+    # Kickboxing & MMA
     "https://sidekickboxing.co.uk/blog/feed/",
-    "https://www.ufcgym.com.au/fitness-blog/rss", # Checking common RSS patterns or using the provided URL if it works with feedparser
+    "https://www.ufcgym.com.au/fitness-blog/rss", 
+    "https://fightcamp.com/blog/rss/",
+    "https://www.bjjee.com/feed/",
     
     # Gymnastics
     "https://shiftmovementscience.com/feed/",
     "https://usagym.org/feed/", 
     "https://mountain-kids.com/feed/",
+    "https://gymnasticscoaching.com/feed/",
+    "https://insidegymnastics.com/feed/",
     
-    # Taekwondo
+    # Taekwondo & Judo
     "https://taekwondonation.com/feed/",
     "https://illinoistkd.com/feed/",
     "http://usnta.net/category/blog/feed/",
+    "https://tkdlifemagazine.com/feed/",
+    "https://judocrazy.com/feed/",
+    
+    # Parenting & Kids Fitness
+    "https://activeforlife.com/feed/",
+    "https://changingthegameproject.com/feed/",
+    "https://breakingmuscle.com/feed/",
     
     # General & Local
     "https://www.skysewsports.com/rss",
@@ -170,7 +198,7 @@ def fetch_content_idea():
         pass
         
     # لو فشل ال RSS، ارجع لإنشاء محتوى أصلي
-    return {"type": "original", "category": post_type, "image_url": DEFAULT_IMAGE}
+    return {"type": "original", "category": post_type, "image_url": random.choice(FALLBACK_IMAGES)}
 
 def generate_social_post(idea):
     """Generate the post text using Groq"""

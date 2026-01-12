@@ -184,7 +184,19 @@ SPORT_EN = {
     "تايكوندو": "taekwondo"
 }
 
-DEFAULT_FALLBACK_IMAGE = "https://i.ibb.co/xKGpF5sQ/469991854-122136396014386621-3832266993418146234-n.jpg"
+FALLBACK_IMAGES = [
+    "https://i.ibb.co/xKGpF5sQ/469991854-122136396014386621-3832266993418146234-n.jpg",
+    "https://images.unsplash.com/photo-1555597673-b21d5c935865?fm=jpg",
+    "https://images.unsplash.com/photo-1516684991026-4c3032a2b4fd?fm=jpg",
+    "https://images.unsplash.com/photo-1607031767898-5f319512ff1e?fm=jpg",
+    "https://images.unsplash.com/photo-1738835935023-ebff4a85bc7e?fm=jpg",
+    "https://images.unsplash.com/photo-1617627590804-1de3424fbf04?fm=jpg",
+    "https://images.unsplash.com/photo-1764622078672-20f2cf5fcbc1?fm=jpg",
+    "https://images.unsplash.com/photo-1711825044889-371d0cdf5fe1?fm=jpg",
+    "https://images.unsplash.com/photo-1699464676033-150f72c9f030?fm=jpg",
+    "https://images.unsplash.com/photo-1616447285757-3d0084ebd43b?fm=jpg",
+    "https://images.unsplash.com/photo-1764622078439-245a43822a5c?fm=jpg"
+]
 
 # --- Coach Persona ---
 COACH_SYSTEM_PROMPT = """أنت "كابتن عز غريب" - مدير ومدرب أكاديمية أبطال أكتوبر للفنون القتالية والجمباز.
@@ -697,9 +709,10 @@ with tab1:
                 st.session_state.chosen_sport = chosen_sport
                 st.session_state.image_url = rss_images[0]['url'] # Default to first RSS image
             else:
-                st.warning("⚠️ لم يتم العثور على صور حديثة في المصادر، سيتم استخدام صورة كابتن عز الافتراضية.")
-                st.session_state.image_url = DEFAULT_FALLBACK_IMAGE
-                st.image(DEFAULT_FALLBACK_IMAGE, caption="صورة افتراضية", width=300)
+                st.warning("⚠️ لم يتم العثور على صور حديثة في المصادر، سيتم استخدام صورة احتياطية.")
+                fb_img = random.choice(FALLBACK_IMAGES)
+                st.session_state.image_url = fb_img
+                st.image(fb_img, caption="صورة احتياطية (من المجموعة)", width=300)
             
             progress.progress(100)
             status.success("✅ تم!")
@@ -797,10 +810,25 @@ with tab2:
         default_rss = """https://feeds.feedburner.com/karatemart
 https://kaizenfitnessusa.com/blog?format=rss
 https://karateoc.com/feed
+https://www.karatebyjesse.com/feed/
 https://kungfu.kids/blog/feed
+https://smabloggers.com/tag/kung-fu/feed
+https://blackbeltmag.com/feed
+https://ymaa.com/publishing/articles/feed
 https://sidekickboxing.co.uk/blog/feed/
+https://www.ufcgym.com.au/fitness-blog/rss
+https://fightcamp.com/blog/rss/
 https://shiftmovementscience.com/feed/
+https://usagym.org/feed/
+https://mountain-kids.com/feed/
+https://gymnasticscoaching.com/feed/
 https://taekwondonation.com/feed/
+https://illinoistkd.com/feed/
+http://usnta.net/category/blog/feed/
+https://tkdlifemagazine.com/feed/
+https://activeforlife.com/feed/
+https://changingthegameproject.com/feed/
+https://breakingmuscle.com/feed/
 https://www.skysewsports.com/rss
 https://www.youm7.com/rss/SectionRss?SectionID=298"""
         

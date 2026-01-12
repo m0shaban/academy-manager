@@ -516,33 +516,55 @@ st.markdown(
     --shadow-sm: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
 }
 
-/* Global Styles */
-* {
+/* Global Styles (radical + safe): avoid applying rules to every element */
+html, body {
+    direction: rtl;
+}
+
+.stApp {
     font-family: 'Cairo', sans-serif !important;
+    direction: rtl !important;
+    background: var(--bg-dark) !important;
 }
 
-/* Preserve Streamlit icon fonts (fix showing 'keyboard_arrow_down' as text) */
-.material-icons,
-.material-symbols-outlined,
-.material-symbols-rounded,
-.material-symbols-sharp {
-    font-family: 'Material Icons' !important;
-    font-weight: normal !important;
-    font-style: normal !important;
-    letter-spacing: normal !important;
-    text-transform: none !important;
-    line-height: 1 !important;
-    white-space: nowrap !important;
-    direction: ltr !important;
+/* Typography only where it matters (prevents breaking widgets/layout) */
+[data-testid="stMarkdownContainer"],
+.stMarkdown,
+.stMarkdown p,
+.stMarkdown li,
+.stMarkdown h1,
+.stMarkdown h2,
+.stMarkdown h3,
+.stMarkdown h4,
+.stMarkdown h5,
+.stMarkdown h6 {
+    text-align: right !important;
+    line-height: 1.85 !important;
+    letter-spacing: 0.2px !important;
 }
 
-html, body, .stApp {
+/* Widget labels: keep readable without affecting internal layout */
+[data-testid="stWidgetLabel"],
+[data-testid="stWidgetLabel"] * {
+    text-align: right !important;
+    line-height: 1.6 !important;
+}
+
+/* Inputs: RTL for Arabic text only */
+[data-testid="stTextInput"] input,
+[data-testid="stNumberInput"] input,
+[data-testid="stTextArea"] textarea,
+[data-testid="stChatInput"] input {
     direction: rtl !important;
     text-align: right !important;
 }
 
-.stApp {
-    background: var(--bg-dark) !important;
+/* URLs & code should stay LTR to avoid visual glitches */
+code, pre,
+[data-testid="stCodeBlock"],
+.stCodeBlock {
+    direction: ltr !important;
+    text-align: left !important;
 }
 
 /* Main Container */
@@ -561,23 +583,11 @@ html, body, .stApp {
     display: none !important;
 }
 
-/* Fix text overlap - RTL spacing */
-h1, h2, h3, h4, h5, h6, p, span, label {
-    line-height: 1.8 !important;
-    letter-spacing: 0.3px !important;
-}
-
-/* Fix keyboard/text overlap in inputs */
-.stTextInput label, .stNumberInput label, .stSelectbox label, .stTextArea label {
-    margin-bottom: 8px !important;
-    display: block !important;
-    font-weight: 600 !important;
-}
-
-/* Fix expander text overlap */
+/* Fix expander header readability (safe scope) */
 [data-testid="stExpander"] summary span {
     line-height: 1.6 !important;
-    word-spacing: 2px !important;
+    word-spacing: 1px !important;
+    letter-spacing: 0.1px !important;
 }
 
 /* ===== HERO HEADER ===== */
@@ -1159,68 +1169,30 @@ h1, h2, h3, h4, h5, h6, p, span, label {
     color: var(--primary-light) !important;
 }
 
-/* ===== RTL FIXES ===== */
-/* Fix all text inputs */
-input, textarea, select {
-    direction: rtl !important;
-    text-align: right !important;
-}
-
-/* Fix columns layout for RTL */
-[data-testid="column"] {
+/* ===== RTL FIXES (safe + minimal) ===== */
+/* Keep containers RTL, but don't override every native tag */
+[data-testid="stAppViewContainer"] {
     direction: rtl !important;
 }
 
-/* Fix chat input */
-[data-testid="stChatInput"] input {
-    direction: rtl !important;
-    text-align: right !important;
-}
-
-/* Fix markdown */
-.stMarkdown, .stMarkdown p, .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4 {
-    direction: rtl !important;
-    text-align: right !important;
-}
-
-/* Fix all labels */
-label {
-    direction: rtl !important;
-    text-align: right !important;
-    display: block !important;
-}
-
-/* Fix widget labels */
-[data-testid="stWidgetLabel"] {
-    direction: rtl !important;
-    text-align: right !important;
-}
-
-/* Fix expander icon position */
-[data-testid="stExpander"] svg {
-    transform: rotate(180deg) !important;
-}
-
-/* Fix tabs for RTL */
+/* Tabs list direction */
 .stTabs [data-baseweb="tab-list"] {
     direction: rtl !important;
 }
 
-/* Fix selectbox */
-[data-testid="stSelectbox"] {
-    direction: rtl !important;
-}
-
-/* Fix info/warning/error boxes */
-.stAlert > div {
-    direction: rtl !important;
+/* Alerts content alignment */
+.stAlert, .stAlert * {
     text-align: right !important;
 }
 
-/* Fix metric cards */
+/* Keep metrics centered as designed */
 [data-testid="metric-container"] {
-    direction: rtl !important;
     text-align: center !important;
+}
+
+/* Optional: expander icon mirroring for RTL (comment out if you dislike it) */
+[data-testid="stExpander"] svg {
+    transform: rotate(180deg) !important;
 }
 </style>
 """,

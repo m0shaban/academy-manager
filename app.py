@@ -521,6 +521,21 @@ st.markdown(
     font-family: 'Cairo', sans-serif !important;
 }
 
+/* Preserve Streamlit icon fonts (fix showing 'keyboard_arrow_down' as text) */
+.material-icons,
+.material-symbols-outlined,
+.material-symbols-rounded,
+.material-symbols-sharp {
+    font-family: 'Material Icons' !important;
+    font-weight: normal !important;
+    font-style: normal !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+    line-height: 1 !important;
+    white-space: nowrap !important;
+    direction: ltr !important;
+}
+
 html, body, .stApp {
     direction: rtl !important;
     text-align: right !important;
@@ -547,7 +562,7 @@ html, body, .stApp {
 }
 
 /* Fix text overlap - RTL spacing */
-h1, h2, h3, h4, h5, h6, p, span, label, div {
+h1, h2, h3, h4, h5, h6, p, span, label {
     line-height: 1.8 !important;
     letter-spacing: 0.3px !important;
 }

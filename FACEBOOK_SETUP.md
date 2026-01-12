@@ -162,7 +162,7 @@ def generate_response(message):
 الأسعار: {ACADEMY_DATA['pricing']}
 العروض: {ACADEMY_DATA['offers']}
 """
-    
+
     try:
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
@@ -180,14 +180,14 @@ def generate_response(message):
 def send_message(recipient_id, message_text):
     """Send message via Facebook Messenger API"""
     import requests
-    
+
     url = f"https://graph.facebook.com/v18.0/me/messages"
     params = {"access_token": PAGE_ACCESS_TOKEN}
     data = {
         "recipient": {"id": recipient_id},
         "message": {"text": message_text}
     }
-    
+
     requests.post(url, params=params, json=data)
 
 @app.route('/webhook', methods=['GET'])
@@ -196,33 +196,33 @@ def verify_webhook():
     mode = request.args.get('hub.mode')
     token = request.args.get('hub.verify_token')
     challenge = request.args.get('hub.challenge')
-    
+
     if mode == 'subscribe' and token == VERIFY_TOKEN:
         print("✅ Webhook verified!")
         return challenge, 200
-    
+
     return 'Forbidden', 403
 
 @app.route('/webhook', methods=['POST'])
 def handle_webhook():
     """Handle incoming messages"""
     data = request.get_json()
-    
+
     if data.get('object') == 'page':
         for entry in data.get('entry', []):
             # Handle Messages
             for messaging in entry.get('messaging', []):
                 sender_id = messaging['sender']['id']
-                
+
                 if 'message' in messaging:
                     message_text = messaging['message'].get('text', '')
-                    
+
                     # Generate response
                     response = generate_response(message_text)
-                    
+
                     # Send back
                     send_message(sender_id, response)
-            
+
             # Handle Comments
             for change in entry.get('changes', []):
                 if change.get('field') == 'feed':
@@ -230,23 +230,23 @@ def handle_webhook():
                     if value.get('item') == 'comment':
                         comment_id = value.get('comment_id')
                         message = value.get('message', '')
-                        
+
                         # Generate response
                         response = generate_response(message)
-                        
+
                         # Reply to comment
                         reply_to_comment(comment_id, response)
-    
+
     return 'OK', 200
 
 def reply_to_comment(comment_id, message):
     """Reply to a Facebook comment"""
     import requests
-    
+
     url = f"https://graph.facebook.com/v18.0/{comment_id}/comments"
     params = {"access_token": PAGE_ACCESS_TOKEN}
     data = {"message": message}
-    
+
     requests.post(url, params=params, json=data)
 
 if __name__ == '__main__':
@@ -347,14 +347,14 @@ services:
 ```python
 def post_to_facebook(message, image_url=None):
     import requests
-    
+
     url = f"https://graph.facebook.com/v18.0/{PAGE_ID}/feed"
     params = {"access_token": PAGE_ACCESS_TOKEN}
-    
+
     data = {"message": message}
     if image_url:
         data["link"] = image_url
-    
+
     response = requests.post(url, params=params, json=data)
     return response.json()
 ```
@@ -363,13 +363,13 @@ def post_to_facebook(message, image_url=None):
 
 ## 📊 ملخص الخطوات
 
-| الخطوة | الوصف | الحالة |
-|--------|-------|--------|
-| 1 | إنشاء Facebook App | ⏳ |
-| 2 | رفع على Streamlit Cloud | ⏳ |
-| 3 | رفع Webhook على Render | ⏳ |
-| 4 | ربط Webhook بـ Facebook | ⏳ |
-| 5 | اختبار الرسائل والتعليقات | ⏳ |
+| الخطوة | الوصف                     | الحالة |
+| ------ | ------------------------- | ------ |
+| 1      | إنشاء Facebook App        | ⏳     |
+| 2      | رفع على Streamlit Cloud   | ⏳     |
+| 3      | رفع Webhook على Render    | ⏳     |
+| 4      | ربط Webhook بـ Facebook   | ⏳     |
+| 5      | اختبار الرسائل والتعليقات | ⏳     |
 
 ---
 

@@ -438,182 +438,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
-# --- Custom CSS ---
-st.markdown(
-    """
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-    
-    * { font-family: 'Cairo', sans-serif; }
-    
-    .main-header {
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-        padding: 2rem;
-        border-radius: 20px;
-        color: white;
-        text-align: center;
-        margin-bottom: 2rem;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-    }
-    
-    .scenario-btn {
-        background: linear-gradient(145deg, #ffffff 0%, #f0f2f6 100%);
-        padding: 1rem;
-        border-radius: 12px;
-        text-align: center;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        transition: all 0.3s ease;
-        border: 2px solid transparent;
-        margin: 5px 0;
-    }
-    
-    .scenario-btn:hover {
-        transform: translateY(-3px);
-        border-color: #667eea;
-    }
-    
-    .user-bubble {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 12px 18px;
-        border-radius: 20px 20px 5px 20px;
-        margin: 8px 0;
-        max-width: 75%;
-        box-shadow: 0 3px 10px rgba(102,126,234,0.3);
-    }
-    
-    .bot-bubble {
-        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-        color: #333;
-        padding: 12px 18px;
-        border-radius: 20px 20px 20px 5px;
-        margin: 8px 0;
-        max-width: 75%;
-        box-shadow: 0 3px 10px rgba(0,0,0,0.1);
-        border: 1px solid #e0e0e0;
-    }
-    
-    .stButton > button {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        padding: 0.6rem 1.5rem;
-        border-radius: 25px;
-        font-weight: 600;
-        transition: all 0.3s ease;
-        box-shadow: 0 4px 15px rgba(102,126,234,0.4);
-    }
-    
-    .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(102,126,234,0.5);
-    }
-    
-    .generated-post {
-        background: #ffffff;
-        padding: 1.5rem;
-        border-radius: 15px;
-        border-right: 5px solid #ffc107;
-        margin: 1rem 0;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        color: #333;
-        direction: rtl;
-        border: 1px solid #f0f0f0;
-    }
-    
-    .image-option {
-        border: 3px solid #e0e0e0;
-        border-radius: 15px;
-        padding: 10px;
-        transition: all 0.3s;
-        cursor: pointer;
-    }
-    
-    .image-option:hover {
-        border-color: #667eea;
-        transform: scale(1.02);
-    }
-    
-    .stat-box {
-        background: linear-gradient(145deg, #ffffff, #f0f0f0);
-        border-radius: 15px;
-        padding: 1rem;
-        text-align: center;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    }
-    
-    .info-banner {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 1rem 1.5rem;
-        border-radius: 12px;
-        margin: 1rem 0;
-    }
-    
-    .image-source-tag {
-        background: #e3f2fd;
-        color: #1976d2;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.8rem;
-    }
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
-# --- Sidebar ---
-with st.sidebar:
-    st.markdown(
-        """
-    <div style="text-align: center; padding: 1rem;">
-        <h2>🥋 أبطال أكتوبر</h2>
-    </div>
-    """,
-        unsafe_allow_html=True,
-    )
-
-    st.divider()
-
-    # API Status
-    st.markdown("### 🔑 حالة الـ APIs")
-
-    # Check for API keys
-    groq_key = GROQ_API_KEY or st.text_input(
-        "Groq API Key", type="password", key="groq_input"
-    )
-    # nvidia_key = NVIDIA_API_KEY or st.text_input("NVIDIA API Key", type="password", key="nvidia_input")
-    # imgbb_key = IMGBB_API_KEY or st.text_input("ImgBB API Key", type="password", key="imgbb_input")
-    fb_token = PAGE_ACCESS_TOKEN or st.text_input(
-        "FB Page Token", type="password", key="fb_input"
-    )
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if groq_key:
-            st.success("✅ Groq")
-        else:
-            st.error("❌ Groq")
-    with col2:
-        if fb_token:
-            st.success("✅ FB")
-        else:
-            st.warning("⚠️ FB")
-
-    st.divider()
-
-    # Quick Stats
-    data = load_academy_data()
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("🏋️ رياضات", len(data.get("schedules", {})))
-    with col2:
-        st.metric("🎁 عروض", len(data.get("offers", [])))
-
-    st.divider()
-
-    # Quick Links
     st.markdown("### 🔗 روابط")
     if data.get("facebook"):
         st.markdown(f"[📘 فيسبوك]({data.get('facebook')})")
@@ -1442,7 +1266,7 @@ with tab5:
     
     # Save Button
     st.markdown("---")
-    if st.button("💾 حفظ كل الإعدادات", type="primary", use_container_width=True):
+    if st.button("� حفظ كل الإعدادات", type="primary", use_container_width=True):
         # Merge all updates
         final_schedules = {**current_schedules, **updated_schedules}
         final_pricing = {**current_pricing, **updated_pricing}
@@ -1588,7 +1412,7 @@ with tab5:
                     updated_pricing[sport] = price_text
             
             with col3:
-                if st.button("🗑️", key=f"del_{sport}"):
+                if st.button("�️", key=f"del_{sport}"):
                     current_schedules.pop(sport, None)
                     current_pricing.pop(sport, None)
                     st.rerun()
@@ -1616,6 +1440,107 @@ with tab5:
         new_offer = st.text_area("➕ عرض جديد", key="new_offer_input", height=60)
         if new_offer:
             updated_offers.append(new_offer)
+    
+    # Subscription Management
+    with st.expander("💳 إدارة الاشتراكات والأكواد (SaaS)", expanded=False):
+        st.markdown("### 🎟️ توليد أكواد الاشتراك")
+        col1, col2, col3 = st.columns([2, 2, 1])
+        with col1:
+            voucher_count = st.number_input("عدد الأكواد", min_value=1, max_value=1000, value=20, key="voucher_count")
+        with col2:
+            voucher_days = st.number_input("مدة الاشتراك (يوم)", min_value=1, max_value=365, value=30, key="voucher_days")
+        with col3:
+            secret_key = st.text_input("مفتاح المدير", type="password", key="admin_secret")
+        
+        if st.button("🎫 توليد الأكواد", type="primary", key="gen_vouchers_btn"):
+            if not secret_key:
+                st.error("مفتاح المدير مطلوب!")
+            else:
+                try:
+                    import requests
+                    response = requests.post(
+                        f"http://localhost:5000/gen-vouchers?secret={secret_key}",
+                        json={"count": voucher_count, "duration_days": voucher_days},
+                        timeout=10
+                    )
+                    if response.status_code == 200:
+                        result = response.json()
+                        st.success(f"✅ تم توليد {result['count']} كود لمدة {result['duration_days']} يوم")
+                        
+                        # Display codes in a downloadable format
+                        codes_text = "\n".join(result["codes"])
+                        st.download_button(
+                            "📥 تحميل الأكواد",
+                            data=codes_text,
+                            file_name=f"vouchers_{voucher_count}_{voucher_days}days.txt",
+                            mime="text/plain"
+                        )
+                        
+                        # Display codes
+                        with st.expander("👀 عرض الأكواد", expanded=False):
+                            st.code(codes_text, language="text")
+                    else:
+                        st.error(f"❌ خطأ: {response.text}")
+                except Exception as e:
+                    st.error(f"❌ خطأ في الاتصال: {str(e)}")
+        
+        st.markdown("---")
+        st.markdown("### 🔑 تفعيل اشتراك")
+        col1, col2, col3 = st.columns([2, 2, 1])
+        with col1:
+            activate_user_id = st.text_input("معرف المستخدم", key="activate_user_id")
+        with col2:
+            activate_code = st.text_input("كود الاشتراك", key="activate_code")
+        with col3:
+            if st.button("✅ تفعيل", key="activate_btn"):
+                if not activate_user_id or not activate_code:
+                    st.error("معرف المستخدم وكود الاشتراك مطلوبان!")
+                else:
+                    try:
+                        import requests
+                        response = requests.post(
+                            "http://localhost:5000/activate",
+                            json={"user_id": activate_user_id, "code": activate_code},
+                            timeout=10
+                        )
+                        if response.status_code == 200:
+                            result = response.json()
+                            if result["status"] == "activated":
+                                st.success(f"✅ تم تفعيل الاشتراك حتى: {result['subscription_end']}")
+                            else:
+                                st.error(f"❌ {result.get('message', 'خطأ في التفعيل')}")
+                        else:
+                            error_data = response.json() if response.content else {"message": response.text}
+                            st.error(f"❌ {error_data.get('message', 'خطأ في التفعيل')}")
+                    except Exception as e:
+                        st.error(f"❌ خطأ في الاتصال: {str(e)}")
+        
+        st.markdown("---")
+        st.markdown("### 📊 فحص حالة الاشتراك")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            check_user_id = st.text_input("معرف المستخدم للفحص", key="check_user_id")
+        with col2:
+            if st.button("🔍 فحص", key="check_status_btn"):
+                if not check_user_id:
+                    st.error("معرف المستخدم مطلوب!")
+                else:
+                    try:
+                        import requests
+                        response = requests.get(
+                            f"http://localhost:5000/subscription-status?user_id={check_user_id}",
+                            timeout=10
+                        )
+                        if response.status_code == 200:
+                            result = response.json()
+                            if result["active"]:
+                                st.success(f"✅ الاشتراك نشط حتى: {result.get('subscription_end', 'غير محدد')}")
+                            else:
+                                st.warning("⚠️ الاشتراك غير نشط أو منتهي الصلاحية")
+                        else:
+                            st.error(f"❌ خطأ في الفحص: {response.text}")
+                    except Exception as e:
+                        st.error(f"❌ خطأ في الاتصال: {str(e)}")
     
     # Save Button
     st.markdown("---")

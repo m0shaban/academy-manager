@@ -1,11 +1,13 @@
 from flask import Flask, request, jsonify
 import os
+import sqlite3
+import random
+from datetime import datetime, timedelta
+
 from groq import Groq
 import requests
 import feedparser
 from bs4 import BeautifulSoup
-import random
-from datetime import datetime
 import pytz
 
 app = Flask(__name__)
@@ -18,6 +20,45 @@ CRON_SECRET = "my_secret_cron_key_123"  # حماية للرابط عشان مح�
 
 # Initialize Groq
 client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
+
+# SQLite DB for SaaS (subscriptions + vouchers)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "saas.db")
+
+
+def get_db():
+    return sqlite3.connect(DB_PATH, check_same_thread=False)
+
+
+def init_db():
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS users (
+            user_id TEXT PRIMARY KEY,
+            subscription_end TEXT,
+            created_at TEXT
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS vouchers (
+            code TEXT PRIMARY KEY,
+            duration_days INTEGER NOT NULL,
+            is_used INTEGER DEFAULT 0,
+            used_by TEXT,
+            used_at TEXT,
+            created_at TEXT
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+init_db()
 
 # الثوابت والصور
 FALLBACK_IMAGES = [
@@ -116,6 +157,86 @@ BOT_CONFIG = {
 
 # ذاكرة مؤقتة لمنع التكرار في نفس الساعة
 LAST_POST_HOUR_KEY = None
+
+
+# ============ SaaS Helpers ============
+def _generate_code(length=12):
+    alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+    return "".join(random.choice(alphabet) for _ in range(length))
+
+
+def generate_vouchers(count=20, duration_days=30):
+    now = datetime.utcnow().isoformat()
+    codes = []
+    conn = get_db()
+    cur = conn.cursor()
+    for _ in range(count):
+        code = _generate_code()
+        codes.append(code)
+        cur.execute(
+            "INSERT OR IGNORE INTO vouchers (code, duration_days, created_at) VALUES (?, ?, ?)",
+            (code, duration_days, now),
+        )
+    conn.commit()
+    conn.close()
+    return codes
+
+
+def activate_voucher(user_id: str, voucher_code: str):
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute(
+        "SELECT duration_days, is_used FROM vouchers WHERE code = ?",
+        (voucher_code,),
+    )
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        return False, "❌ الكود غير صحيح"
+
+    duration_days, is_used = row
+    if is_used:
+        conn.close()
+        return False, "⚠️ الكود مستخدم مسبقاً"
+
+    expiry = datetime.utcnow() + timedelta(days=duration_days)
+    expiry_str = expiry.isoformat()
+    now = datetime.utcnow().isoformat()
+
+    # Upsert user
+    cur.execute(
+        "INSERT OR REPLACE INTO users (user_id, subscription_end, created_at) VALUES (?, ?, COALESCE((SELECT created_at FROM users WHERE user_id = ?), ?))",
+        (user_id, expiry_str, user_id, now),
+    )
+
+    # Mark voucher used
+    cur.execute(
+        "UPDATE vouchers SET is_used = 1, used_by = ?, used_at = ? WHERE code = ?",
+        (user_id, now, voucher_code),
+    )
+
+    conn.commit()
+    conn.close()
+    return True, expiry_str
+
+
+def is_premium(user_id: str):
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT subscription_end FROM users WHERE user_id = ?",
+        (user_id,),
+    )
+    row = cur.fetchone()
+    conn.close()
+    if not row or not row[0]:
+        return False
+    try:
+        expiry = datetime.fromisoformat(row[0])
+        return expiry > datetime.utcnow()
+    except Exception:
+        return False
 
 
 def get_mood_prompt(mood):
@@ -420,6 +541,59 @@ def update_config():
         RSS_FEEDS = data["rss_feeds"]  # Update the global RSS list too
 
     return jsonify({"status": "updated", "config": BOT_CONFIG})
+
+
+@app.route("/gen-vouchers", methods=["POST"])
+def gen_vouchers():
+    secret = request.args.get("secret")
+    if secret != CRON_SECRET:
+        return "Unauthorized", 401
+
+    data = request.get_json() or {}
+    count = int(data.get("count", 20))
+    duration = int(data.get("duration_days", 30))
+
+    codes = generate_vouchers(count=count, duration_days=duration)
+    return jsonify({"status": "ok", "count": len(codes), "duration_days": duration, "codes": codes})
+
+
+@app.route("/activate", methods=["POST"])
+def activate_subscription_route():
+    data = request.get_json() or {}
+    user_id = data.get("user_id")
+    voucher_code = data.get("code")
+
+    if not user_id or not voucher_code:
+        return jsonify({"status": "error", "message": "user_id و code مطلوبان"}), 400
+
+    ok, result = activate_voucher(user_id, voucher_code)
+    if ok:
+        return jsonify({"status": "activated", "subscription_end": result})
+    return jsonify({"status": "error", "message": result}), 400
+
+
+@app.route("/subscription-status", methods=["GET"])
+def subscription_status():
+    user_id = request.args.get("user_id")
+    secret = request.args.get("secret")
+
+    if secret and secret != CRON_SECRET:
+        return "Unauthorized", 401
+
+    if not user_id:
+        return jsonify({"status": "error", "message": "user_id مطلوب"}), 400
+
+    active = is_premium(user_id)
+
+    # Fetch expiry
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT subscription_end FROM users WHERE user_id = ?", (user_id,))
+    row = cur.fetchone()
+    conn.close()
+    expiry = row[0] if row and row[0] else None
+
+    return jsonify({"status": "active" if active else "expired", "active": active, "subscription_end": expiry})
 
 
 @app.route("/auto-post-trigger", methods=["GET", "POST"])

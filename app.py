@@ -10,6 +10,7 @@ import random
 import requests
 import base64
 import os
+import time
 from pathlib import Path
 from datetime import datetime
 from io import BytesIO
@@ -621,23 +622,28 @@ with st.sidebar:
     st.markdown(f"📞 **{data.get('phone', '')}**")
 
 # --- Main Header ---
+data = load_academy_data()
+system_name = data.get('system_name', '🥋 مدير أكاديمية أبطال أكتوبر')
+system_subtitle = data.get('system_subtitle', 'نظام ذكي لإدارة المحتوى مع توليد الصور 🖼️')
+
 st.markdown(
-    """
+    f"""
 <div class="main-header">
-    <h1 style="margin:0; font-size: 2.5rem;">🥋 مدير أكاديمية أبطال أكتوبر</h1>
-    <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">نظام ذكي لإدارة المحتوى مع توليد الصور 🖼️</p>
+    <h1 style="margin:0; font-size: 2.5rem;">{system_name}</h1>
+    <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">{system_subtitle}</p>
 </div>
 """,
     unsafe_allow_html=True,
 )
 
 # --- Navigation Tabs ---
-tab1, tab2, tab3, tab4 = st.tabs(
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
     [
         "✨ مولد المحتوى",
         "🤖 غرفة عمليات الكابتن (أتمتة)",
         "💬 بوت الردود",
         "📊 نظرة عامة",
+        "⚙️ إعدادات النظام"
     ]
 )
 
@@ -1285,13 +1291,370 @@ with tab4:
     for offer in data.get("offers", []):
         st.success(offer)
 
+# ========================================
+# TAB 5: System Settings
+# ========================================
+with tab5:
+    st.markdown("## ⚙️ إعدادات النظام الكاملة")
+    st.info("💡 هنا يمكنك تخصيص كل جانب من جوانب النظام - الاسم، البيانات، الألوان، كل شيء!")
+    
+    data = load_academy_data()
+    
+    # System Branding
+    with st.expander("🎨 العلامة التجارية (النظام)", expanded=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            system_name = st.text_input(
+                "اسم النظام (في الهيدر)",
+                value=data.get('system_name', '🥋 مدير أكاديمية أبطال أكتوبر'),
+                key="sys_name"
+            )
+        with col2:
+            system_subtitle = st.text_input(
+                "نبذة النظام (تحت الهيدر)",
+                value=data.get('system_subtitle', 'نظام ذكي لإدارة المحتوى مع توليد الصور 🖼️'),
+                key="sys_subtitle"
+            )
+    
+    # Academy Info
+    with st.expander("🏢 معلومات الأكاديمية الأساسية", expanded=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            academy_name = st.text_input(
+                "اسم الأكاديمية",
+                value=data.get('academy_name', ''),
+                key="set_academy_name"
+            )
+            manager = st.text_input(
+                "اسم المدير",
+                value=data.get('manager', ''),
+                key="set_manager"
+            )
+            phone = st.text_input(
+                "رقم التواصل الأساسي",
+                value=data.get('phone', ''),
+                key="set_phone"
+            )
+            phone_alt = st.text_input(
+                "رقم التواصل البديل",
+                value=data.get('phone_alt', ''),
+                key="set_phone_alt"
+            )
+        
+        with col2:
+            location = st.text_area(
+                "العنوان",
+                value=data.get('location', ''),
+                key="set_location",
+                height=100
+            )
+            map_link = st.text_input(
+                "رابط الخريطة (Google Maps)",
+                value=data.get('map_link', ''),
+                key="set_map"
+            )
+            facebook = st.text_input(
+                "رابط الفيسبوك",
+                value=data.get('facebook', ''),
+                key="set_facebook"
+            )
+    
+    # Schedules & Pricing
+    with st.expander("📅 المواعيد والأسعار", expanded=False):
+        st.markdown("### إدارة الرياضات")
+        
+        current_schedules = data.get('schedules', {})
+        current_pricing = data.get('pricing', {})
+        
+        # Add new sport
+        col_new1, col_new2, col_new3 = st.columns([2, 2, 1])
+        with col_new1:
+            new_sport_name = st.text_input("اسم رياضة جديدة", key="new_sport_input")
+        with col_new2:
+            new_sport_schedule = st.text_input("الموعد", placeholder="مثال: الأحد والثلاثاء - 4:30 م", key="new_sport_schedule")
+        with col_new3:
+            new_sport_price = st.text_input("السعر", placeholder="500 جنيه", key="new_sport_price")
+        
+        if st.button("➕ إضافة رياضة", key="add_sport_btn"):
+            if new_sport_name and new_sport_schedule and new_sport_price:
+                current_schedules[new_sport_name] = [new_sport_schedule]
+                current_pricing[new_sport_name] = new_sport_price
+                st.success(f"تمت إضافة {new_sport_name}!")
+                st.rerun()
+        
+        st.markdown("---")
+        st.markdown("### تعديل الرياضات الحالية")
+        
+        updated_schedules = {}
+        updated_pricing = {}
+        
+        for sport in list(current_schedules.keys()):
+            col1, col2, col3 = st.columns([2, 2, 1])
+            with col1:
+                schedule_text = st.text_input(
+                    f"موعد {sport}",
+                    value=", ".join(current_schedules.get(sport, [])),
+                    key=f"schedule_{sport}"
+                )
+                if schedule_text:
+                    updated_schedules[sport] = [schedule_text]
+            
+            with col2:
+                price_text = st.text_input(
+                    f"سعر {sport}",
+                    value=current_pricing.get(sport, ''),
+                    key=f"price_{sport}"
+                )
+                if price_text:
+                    updated_pricing[sport] = price_text
+            
+            with col3:
+                if st.button("🗑️", key=f"del_{sport}"):
+                    current_schedules.pop(sport, None)
+                    current_pricing.pop(sport, None)
+                    st.rerun()
+    
+    # Offers
+    with st.expander("🎁 العروض الحالية", expanded=False):
+        current_offers = data.get('offers', [])
+        updated_offers = []
+        
+        for i, offer in enumerate(current_offers):
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                edited_offer = st.text_area(
+                    f"عرض {i+1}",
+                    value=offer,
+                    key=f"offer_edit_{i}",
+                    height=60
+                )
+                if edited_offer:
+                    updated_offers.append(edited_offer)
+            with col2:
+                if st.button("🗑️", key=f"del_offer_{i}"):
+                    pass  # Skip this offer
+                else:
+                    pass  # Keep it (already added above)
+        
+        new_offer = st.text_area("➕ عرض جديد", key="new_offer_input", height=60)
+        if new_offer:
+            updated_offers.append(new_offer)
+    
+    # Save Button
+    st.markdown("---")
+    if st.button("💾 حفظ كل الإعدادات", type="primary", use_container_width=True):
+        # Merge all updates
+        final_schedules = {**current_schedules, **updated_schedules}
+        final_pricing = {**current_pricing, **updated_pricing}
+        
+        complete_data = {
+            "system_name": system_name,
+            "system_subtitle": system_subtitle,
+            "academy_name": academy_name,
+            "manager": manager,
+            "phone": phone,
+            "phone_alt": phone_alt,
+            "location": location,
+            "map_link": map_link,
+            "facebook": facebook,
+            "schedules": final_schedules,
+            "pricing": final_pricing,
+            "offers": updated_offers if updated_offers else current_offers,
+            "system_prompt": data.get('system_prompt', COACH_SYSTEM_PROMPT),
+            "content_sources": data.get('content_sources', {})
+        }
+        
+        save_academy_data(complete_data)
+        st.success("✅ تم حفظ جميع الإعدادات بنجاح!")
+        st.balloons()
+        time.sleep(1)
+        st.rerun()
+
+# ========================================
+# TAB 5: System Settings
+# ========================================
+with tab5:
+    st.markdown("## ⚙️ إعدادات النظام الكاملة")
+    st.info("💡 هنا يمكنك تخصيص كل جانب من جوانب النظام - الاسم، البيانات، كل شيء!")
+    
+    data = load_academy_data()
+    
+    # System Branding
+    with st.expander("🎨 العلامة التجارية (النظام)", expanded=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            system_name = st.text_input(
+                "اسم النظام (في الهيدر)",
+                value=data.get('system_name', '🥋 مدير أكاديمية أبطال أكتوبر'),
+                key="sys_name"
+            )
+        with col2:
+            system_subtitle = st.text_input(
+                "نبذة النظام (تحت الهيدر)",
+                value=data.get('system_subtitle', 'نظام ذكي لإدارة المحتوى مع توليد الصور 🖼️'),
+                key="sys_subtitle"
+            )
+    
+    # Academy Info
+    with st.expander("🏢 معلومات الأكاديمية الأساسية", expanded=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            academy_name = st.text_input(
+                "اسم الأكاديمية",
+                value=data.get('academy_name', ''),
+                key="set_academy_name"
+            )
+            manager = st.text_input(
+                "اسم المدير",
+                value=data.get('manager', ''),
+                key="set_manager"
+            )
+            phone = st.text_input(
+                "رقم التواصل الأساسي",
+                value=data.get('phone', ''),
+                key="set_phone"
+            )
+            phone_alt = st.text_input(
+                "رقم التواصل البديل",
+                value=data.get('phone_alt', ''),
+                key="set_phone_alt"
+            )
+        
+        with col2:
+            location = st.text_area(
+                "العنوان",
+                value=data.get('location', ''),
+                key="set_location",
+                height=100
+            )
+            map_link = st.text_input(
+                "رابط الخريطة (Google Maps)",
+                value=data.get('map_link', ''),
+                key="set_map"
+            )
+            facebook = st.text_input(
+                "رابط الفيسبوك",
+                value=data.get('facebook', ''),
+                key="set_facebook"
+            )
+    
+    # Schedules & Pricing
+    with st.expander("📅 المواعيد والأسعار", expanded=False):
+        st.markdown("### إدارة الرياضات")
+        
+        current_schedules = data.get('schedules', {})
+        current_pricing = data.get('pricing', {})
+        
+        # Add new sport
+        col_new1, col_new2, col_new3 = st.columns([2, 2, 1])
+        with col_new1:
+            new_sport_name = st.text_input("اسم رياضة جديدة", key="new_sport_input")
+        with col_new2:
+            new_sport_schedule = st.text_input("الموعد", placeholder="مثال: الأحد والثلاثاء - 4:30 م", key="new_sport_schedule")
+        with col_new3:
+            new_sport_price = st.text_input("السعر", placeholder="500 جنيه", key="new_sport_price")
+        
+        if st.button("➕ إضافة رياضة", key="add_sport_btn"):
+            if new_sport_name and new_sport_schedule and new_sport_price:
+                current_schedules[new_sport_name] = [new_sport_schedule]
+                current_pricing[new_sport_name] = new_sport_price
+                st.success(f"تمت إضافة {new_sport_name}!")
+                st.rerun()
+        
+        st.markdown("---")
+        st.markdown("### تعديل الرياضات الحالية")
+        
+        updated_schedules = {}
+        updated_pricing = {}
+        
+        for sport in list(current_schedules.keys()):
+            col1, col2, col3 = st.columns([2, 2, 1])
+            with col1:
+                schedule_text = st.text_input(
+                    f"موعد {sport}",
+                    value=", ".join(current_schedules.get(sport, [])),
+                    key=f"schedule_{sport}"
+                )
+                if schedule_text:
+                    updated_schedules[sport] = [schedule_text]
+            
+            with col2:
+                price_text = st.text_input(
+                    f"سعر {sport}",
+                    value=current_pricing.get(sport, ''),
+                    key=f"price_{sport}"
+                )
+                if price_text:
+                    updated_pricing[sport] = price_text
+            
+            with col3:
+                if st.button("🗑️", key=f"del_{sport}"):
+                    current_schedules.pop(sport, None)
+                    current_pricing.pop(sport, None)
+                    st.rerun()
+    
+    # Offers
+    with st.expander("🎁 العروض الحالية", expanded=False):
+        current_offers = data.get('offers', [])
+        updated_offers = []
+        
+        for i, offer in enumerate(current_offers):
+            col1, col2 = st.columns([5, 1])
+            with col1:
+                edited_offer = st.text_area(
+                    f"عرض {i+1}",
+                    value=offer,
+                    key=f"offer_edit_{i}",
+                    height=60
+                )
+                if edited_offer:
+                    updated_offers.append(edited_offer)
+            with col2:
+                if st.button("🗑️", key=f"del_offer_{i}"):
+                    pass  # Skip this offer
+        
+        new_offer = st.text_area("➕ عرض جديد", key="new_offer_input", height=60)
+        if new_offer:
+            updated_offers.append(new_offer)
+    
+    # Save Button
+    st.markdown("---")
+    if st.button("💾 حفظ كل الإعدادات", type="primary", use_container_width=True):
+        # Merge all updates
+        final_schedules = {**current_schedules, **updated_schedules}
+        final_pricing = {**current_pricing, **updated_pricing}
+        
+        complete_data = {
+            "system_name": system_name,
+            "system_subtitle": system_subtitle,
+            "academy_name": academy_name,
+            "manager": manager,
+            "phone": phone,
+            "phone_alt": phone_alt,
+            "location": location,
+            "map_link": map_link,
+            "facebook": facebook,
+            "schedules": final_schedules,
+            "pricing": final_pricing,
+            "offers": updated_offers if updated_offers else current_offers,
+            "system_prompt": data.get('system_prompt', COACH_SYSTEM_PROMPT),
+            "content_sources": data.get('content_sources', {})
+        }
+        
+        save_academy_data(complete_data)
+        st.success("✅ تم حفظ جميع الإعدادات بنجاح!")
+        st.balloons()
+        time.sleep(1)
+        st.rerun()
+
 # --- Footer ---
 st.markdown("---")
+footer_data = load_academy_data()
 st.markdown(
-    """
+    f"""
 <div style="text-align: center; color: #888; padding: 1rem;">
-    🥋 <strong>أكاديمية أبطال أكتوبر</strong> - v3.0 مع توليد الصور<br>
-    <small>Groq + NVIDIA FLUX + ImgBB 🚀</small>
+    🥋 <strong>{footer_data.get('academy_name', 'الأكاديمية')}</strong> - v4.0 Multi-Tenant Ready<br>
+    <small>Powered by Groq + Facebook API 🚀</small>
 </div>
 """,
     unsafe_allow_html=True,

@@ -521,17 +521,26 @@ def handle_webhook():
                 if change.get("field") == "feed":
                     value = change.get("value", {})
 
+                    # Only reply to NEW comments (add)
+                    if value.get("verb") != "add":
+                        continue
+
                     if value.get("item") == "comment":
                         comment_id = value.get("comment_id")
                         message = value.get("message", "")
+                        sender_id = value.get("from", {}).get("id")
 
-                        print(f"💭 Comment {comment_id}: {message}")
+                        # Print debug info
+                        print(f"DEBUG: Processing comment from {sender_id}: {message}")
 
                         # Generate response
                         response = generate_response(message)
 
                         # Reply to comment
-                        reply_to_comment(comment_id, response)
+                        if response:
+                             reply_to_comment(comment_id, response)
+                        else:
+                             print("❌ Failed to generate response for comment")
 
     return "OK", 200
 

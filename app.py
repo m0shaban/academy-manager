@@ -21,18 +21,21 @@ from io import BytesIO
 # Try to import optional libraries
 try:
     from groq import Groq
+
     GROQ_AVAILABLE = True
 except ImportError:
     GROQ_AVAILABLE = False
 
 try:
     from openai import OpenAI
+
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
 
 try:
     import feedparser
+
     FEEDPARSER_AVAILABLE = True
 except ImportError:
     FEEDPARSER_AVAILABLE = False
@@ -55,25 +58,28 @@ except FileNotFoundError:
     IMGBB_API_KEY = ""
     PAGE_ACCESS_TOKEN = ""
 
+
 def post_to_facebook_page(message, access_token, image_url=None):
     """Post content to Facebook Page Feed (Robust Mode)."""
     if not access_token:
         return None, "❌ لم يتم العثور على Page Access Token"
-        
+
     params = {"access_token": access_token}
-    
+
     # محاولة 1: النشر كصورة (شكل أفضل)
     if image_url:
         try:
             url = f"https://graph.facebook.com/v18.0/me/photos"
             data = {"url": image_url, "caption": message}
             response = requests.post(url, params=params, json=data, timeout=30)
-            
+
             # إذا نجح، ارجع فوراً
             if response.status_code == 200:
                 return response.json(), None
             else:
-                print(f"⚠️ فشل نشر الصورة مباشرة ({response.status_code})، جاري المحاولة كرابط...")
+                print(
+                    f"⚠️ فشل نشر الصورة مباشرة ({response.status_code})، جاري المحاولة كرابط..."
+                )
         except Exception as e:
             print(f"⚠️ خطأ في نشر الصورة: {e}")
 
@@ -82,13 +88,14 @@ def post_to_facebook_page(message, access_token, image_url=None):
     data = {"message": message}
     if image_url:
         data["link"] = image_url
-        
+
     try:
         response = requests.post(url, params=params, json=data, timeout=30)
         response.raise_for_status()
         return response.json(), None
     except Exception as e:
         return None, f"❌ خطأ نهائي في النشر على فيسبوك: {str(e)}"
+
 
 # --- Content Scenarios ---
 CONTENT_SCENARIOS = {
@@ -100,7 +107,7 @@ CONTENT_SCENARIOS = {
 - عملية وقابلة للتطبيق
 - مناسبة للمبتدئين والمتقدمين
 - تشجع على الاستمرار في التدريب
-اختم بتشجيع بسيط ودعوة للتدريب في الأكاديمية."""
+اختم بتشجيع بسيط ودعوة للتدريب في الأكاديمية.""",
     },
     "🏆 قصة نجاح": {
         "icon": "🏆",
@@ -110,7 +117,7 @@ CONTENT_SCENARIOS = {
 - التحول في شخصيته (الثقة، الانضباط)
 - الفوائد الصحية والنفسية
 - دور الأكاديمية في تطويره
-اجعلها عاطفية ومحفزة للآباء للتسجيل."""
+اجعلها عاطفية ومحفزة للآباء للتسجيل.""",
     },
     "❓ هل تعلم": {
         "icon": "❓",
@@ -120,7 +127,7 @@ CONTENT_SCENARIOS = {
 - مفاجئة وجديدة
 - علمية أو تاريخية
 - تبرز فوائد الرياضة
-اختم بسؤال تفاعلي يشجع على التعليق."""
+اختم بسؤال تفاعلي يشجع على التعليق.""",
     },
     "📢 إعلان عرض": {
         "icon": "📢",
@@ -130,7 +137,7 @@ CONTENT_SCENARIOS = {
 - واضح ومباشر
 - يخلق إحساس بالعجلة (عرض محدود)
 - يتضمن السعر والموعد ورقم التواصل
-استخدم إيموجي بشكل جذاب."""
+استخدم إيموجي بشكل جذاب.""",
     },
     "🎯 دعوة للتسجيل": {
         "icon": "🎯",
@@ -140,7 +147,7 @@ CONTENT_SCENARIOS = {
 - فوائد الرياضة للطفل
 - الموعد والسعر
 - أرقام التواصل والعنوان
-اجعلها مقنعة للآباء المترددين."""
+اجعلها مقنعة للآباء المترددين.""",
     },
     "🧘 فوائد صحية": {
         "icon": "🧘",
@@ -150,7 +157,7 @@ CONTENT_SCENARIOS = {
 - الفوائد البدنية (القوة، المرونة، التنسيق)
 - الفوائد النفسية (الثقة، التركيز، الانضباط)
 - الفوائد الاجتماعية (العمل الجماعي، الاحترام)
-اختم بدعوة للاشتراك."""
+اختم بدعوة للاشتراك.""",
     },
     "👨‍👩‍👧 نصيحة للآباء": {
         "icon": "👨‍👩‍👧",
@@ -160,7 +167,7 @@ CONTENT_SCENARIOS = {
 - كيفية تشجيع الطفل
 - أهمية الصبر والاستمرارية
 - دور الأسرة في النجاح الرياضي
-اجعلها ودودة ومفيدة."""
+اجعلها ودودة ومفيدة.""",
     },
     "📅 تذكير بالمواعيد": {
         "icon": "📅",
@@ -170,8 +177,8 @@ CONTENT_SCENARIOS = {
 - واضح وسهل القراءة
 - يشجع على الالتزام
 - يتضمن معلومات التواصل للاستفسار
-اجعله حماسي ومشجع."""
-    }
+اجعله حماسي ومشجع.""",
+    },
 }
 
 # Sport translations for image prompts
@@ -181,7 +188,7 @@ SPORT_EN = {
     "كيك بوكسينج": "kickboxing",
     "جمباز": "gymnastics",
     "ملاكمة": "boxing",
-    "تايكوندو": "taekwondo"
+    "تايكوندو": "taekwondo",
 }
 
 FALLBACK_IMAGES = [
@@ -195,7 +202,7 @@ FALLBACK_IMAGES = [
     "https://images.unsplash.com/photo-1711825044889-371d0cdf5fe1?fm=jpg",
     "https://images.unsplash.com/photo-1699464676033-150f72c9f030?fm=jpg",
     "https://images.unsplash.com/photo-1616447285757-3d0084ebd43b?fm=jpg",
-    "https://images.unsplash.com/photo-1764622078439-245a43822a5c?fm=jpg"
+    "https://images.unsplash.com/photo-1764622078439-245a43822a5c?fm=jpg",
 ]
 
 # --- Coach Persona ---
@@ -227,6 +234,7 @@ COACH_SYSTEM_PROMPT = """أنت "كابتن عز غريب" - مدير ومدرب
 - أكد على أهمية الرياضة في بناء شخصية الطفل
 - اذكر أن التدريب مناسب لجميع الأعمار من 4 سنوات"""
 
+
 # --- Helper Functions ---
 def load_academy_data():
     """Load academy data from JSON file."""
@@ -235,10 +243,12 @@ def load_academy_data():
             return json.load(f)
     return {}
 
+
 def save_academy_data(data):
     """Save academy data to JSON file."""
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
+
 
 def get_ai_client(provider, api_key):
     """Get AI client based on provider selection."""
@@ -248,12 +258,13 @@ def get_ai_client(provider, api_key):
         return OpenAI(api_key=api_key), "gpt-4o-mini"
     return None, None
 
+
 def generate_ai_response(client, model, system_prompt, user_message, academy_data):
     """Generate AI response with context injection."""
     phones = f"{academy_data.get('phone', '')}"
-    if academy_data.get('phone_alt'):
+    if academy_data.get("phone_alt"):
         phones += f" أو {academy_data.get('phone_alt')}"
-    
+
     context = f"""
 📍 معلومات الأكاديمية:
 - الاسم: {academy_data.get('academy_name', '')}
@@ -272,98 +283,109 @@ def generate_ai_response(client, model, system_prompt, user_message, academy_dat
 🎁 العروض الحالية:
 {chr(10).join('- ' + offer for offer in academy_data.get('offers', []))}
 """
-    
+
     full_system_prompt = f"{system_prompt}\n\n{context}"
-    
+
     try:
         response = client.chat.completions.create(
             model=model,
             messages=[
                 {"role": "system", "content": full_system_prompt},
-                {"role": "user", "content": user_message}
+                {"role": "user", "content": user_message},
             ],
             max_tokens=1024,
-            temperature=0.7
+            temperature=0.7,
         )
         return response.choices[0].message.content
     except Exception as e:
         return f"❌ خطأ في الاتصال بالـ API: {str(e)}"
+
 
 # --- Image Functions ---
 def fetch_rss_images(sport, data):
     """Fetch images from RSS feeds for a specific sport."""
     if not FEEDPARSER_AVAILABLE:
         return []
-    
+
     content_sources = data.get("content_sources", {})
     sport_sources = content_sources.get(sport, [])
-    
+
     images = []
     for source in sport_sources[:2]:  # Limit to 2 sources to avoid delays
         try:
             feed = feedparser.parse(source.get("url", ""))
             for entry in feed.entries[:3]:
                 # Try to find images in entry
-                if hasattr(entry, 'media_content'):
+                if hasattr(entry, "media_content"):
                     for media in entry.media_content:
-                        if 'image' in media.get('type', ''):
-                            images.append({
-                                "url": media.get('url'),
-                                "title": entry.get('title', ''),
-                                "source": source.get('name', '')
-                            })
+                        if "image" in media.get("type", ""):
+                            images.append(
+                                {
+                                    "url": media.get("url"),
+                                    "title": entry.get("title", ""),
+                                    "source": source.get("name", ""),
+                                }
+                            )
                 # Check for enclosures (common in RSS)
-                if hasattr(entry, 'enclosures'):
+                if hasattr(entry, "enclosures"):
                     for enc in entry.enclosures:
-                        if 'image' in enc.get('type', ''):
-                            images.append({
-                                "url": enc.get('href'),
-                                "title": entry.get('title', ''),
-                                "source": source.get('name', '')
-                            })
+                        if "image" in enc.get("type", ""):
+                            images.append(
+                                {
+                                    "url": enc.get("href"),
+                                    "title": entry.get("title", ""),
+                                    "source": source.get("name", ""),
+                                }
+                            )
                 # Check for images in content
-                if hasattr(entry, 'content'):
+                if hasattr(entry, "content"):
                     for content in entry.content:
-                        if '<img' in content.get('value', ''):
+                        if "<img" in content.get("value", ""):
                             import re
-                            img_urls = re.findall(r'src="([^"]+)"', content.get('value', ''))
+
+                            img_urls = re.findall(
+                                r'src="([^"]+)"', content.get("value", "")
+                            )
                             for img_url in img_urls:
-                                if img_url.startswith('http'):
-                                    images.append({
-                                        "url": img_url,
-                                        "title": entry.get('title', ''),
-                                        "source": source.get('name', '')
-                                    })
+                                if img_url.startswith("http"):
+                                    images.append(
+                                        {
+                                            "url": img_url,
+                                            "title": entry.get("title", ""),
+                                            "source": source.get("name", ""),
+                                        }
+                                    )
         except Exception as e:
             continue
-    
+
     return images[:5]  # Return max 5 images
+
 
 def generate_nvidia_image(prompt, api_key):
     """Generate image using NVIDIA FLUX API."""
     if not api_key:
         return None, "❌ مفتاح NVIDIA API غير موجود"
-    
+
     url = "https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux-schnell"
-    
+
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
-        "Accept": "application/json"
+        "Accept": "application/json",
     }
-    
+
     payload = {
         "prompt": prompt,
         "height": 1024,
         "width": 1024,
         "num_inference_steps": 4,
-        "guidance_scale": 0.0
+        "guidance_scale": 0.0,
     }
-    
+
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=60)
         response.raise_for_status()
-        
+
         data = response.json()
         if "image" in data:
             # Decode base64 image
@@ -372,7 +394,7 @@ def generate_nvidia_image(prompt, api_key):
             return data["artifacts"][0].get("base64"), None
         else:
             return None, "❌ لم يتم استلام صورة من API"
-            
+
     except requests.exceptions.Timeout:
         return None, "⏱️ انتهى وقت الانتظار - حاول مرة أخرى"
     except requests.exceptions.RequestException as e:
@@ -380,42 +402,45 @@ def generate_nvidia_image(prompt, api_key):
     except Exception as e:
         return None, f"❌ خطأ غير متوقع: {str(e)}"
 
+
 def upload_to_imgbb(image_base64, api_key):
     """Upload base64 image to ImgBB and return URL."""
     if not api_key:
         return None, "❌ مفتاح ImgBB API غير موجود"
-    
+
     url = "https://api.imgbb.com/1/upload"
-    
+
     payload = {
         "key": api_key,
         "image": image_base64,
-        "name": f"academy_post_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        "name": f"academy_post_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
     }
-    
+
     try:
         response = requests.post(url, data=payload, timeout=30)
         response.raise_for_status()
-        
+
         data = response.json()
         if data.get("success"):
             return data["data"]["url"], None
         else:
             return None, "❌ فشل رفع الصورة"
-            
+
     except Exception as e:
         return None, f"❌ خطأ في رفع الصورة: {str(e)}"
+
 
 # --- Page Configuration ---
 st.set_page_config(
     page_title="أكاديمية أبطال أكتوبر v3.1",
     page_icon="🥋",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 # --- Custom CSS ---
-st.markdown("""
+st.markdown(
+    """
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
     
@@ -533,27 +558,36 @@ st.markdown("""
         font-size: 0.8rem;
     }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # --- Sidebar ---
 with st.sidebar:
-    st.markdown("""
+    st.markdown(
+        """
     <div style="text-align: center; padding: 1rem;">
         <h2>🥋 أبطال أكتوبر</h2>
     </div>
-    """, unsafe_allow_html=True)
-    
+    """,
+        unsafe_allow_html=True,
+    )
+
     st.divider()
-    
+
     # API Status
     st.markdown("### 🔑 حالة الـ APIs")
-    
+
     # Check for API keys
-    groq_key = GROQ_API_KEY or st.text_input("Groq API Key", type="password", key="groq_input")
+    groq_key = GROQ_API_KEY or st.text_input(
+        "Groq API Key", type="password", key="groq_input"
+    )
     # nvidia_key = NVIDIA_API_KEY or st.text_input("NVIDIA API Key", type="password", key="nvidia_input")
     # imgbb_key = IMGBB_API_KEY or st.text_input("ImgBB API Key", type="password", key="imgbb_input")
-    fb_token = PAGE_ACCESS_TOKEN or st.text_input("FB Page Token", type="password", key="fb_input")
-    
+    fb_token = PAGE_ACCESS_TOKEN or st.text_input(
+        "FB Page Token", type="password", key="fb_input"
+    )
+
     col1, col2 = st.columns(2)
     with col1:
         if groq_key:
@@ -565,42 +599,47 @@ with st.sidebar:
             st.success("✅ FB")
         else:
             st.warning("⚠️ FB")
-    
+
     st.divider()
-    
+
     # Quick Stats
     data = load_academy_data()
     col1, col2 = st.columns(2)
     with col1:
-        st.metric("🏋️ رياضات", len(data.get('schedules', {})))
+        st.metric("🏋️ رياضات", len(data.get("schedules", {})))
     with col2:
-        st.metric("🎁 عروض", len(data.get('offers', [])))
-    
+        st.metric("🎁 عروض", len(data.get("offers", [])))
+
     st.divider()
-    
+
     # Quick Links
     st.markdown("### 🔗 روابط")
-    if data.get('facebook'):
+    if data.get("facebook"):
         st.markdown(f"[📘 فيسبوك]({data.get('facebook')})")
-    if data.get('map_link'):
+    if data.get("map_link"):
         st.markdown(f"[📍 الخريطة]({data.get('map_link')})")
     st.markdown(f"📞 **{data.get('phone', '')}**")
 
 # --- Main Header ---
-st.markdown("""
+st.markdown(
+    """
 <div class="main-header">
     <h1 style="margin:0; font-size: 2.5rem;">🥋 مدير أكاديمية أبطال أكتوبر</h1>
     <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">نظام ذكي لإدارة المحتوى مع توليد الصور 🖼️</p>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # --- Navigation Tabs ---
-tab1, tab2, tab3, tab4 = st.tabs([
-    "✨ مولد المحتوى",
-    "🤖 غرفة عمليات الكابتن (أتمتة)", 
-    "💬 بوت الردود",
-    "📊 نظرة عامة"
-])
+tab1, tab2, tab3, tab4 = st.tabs(
+    [
+        "✨ مولد المحتوى",
+        "🤖 غرفة عمليات الكابتن (أتمتة)",
+        "💬 بوت الردود",
+        "📊 نظرة عامة",
+    ]
+)
 
 # ========================================
 # TAB 1: Content Generator
@@ -608,57 +647,56 @@ tab1, tab2, tab3, tab4 = st.tabs([
 with tab1:
     st.markdown("## ✨ مولد المحتوى الذكي مع الصور")
     st.markdown("المنشور يطلع جاهز بالنص والصورة - انسخ وانشر مباشرة! 🚀")
-    
+
     data = load_academy_data()
     sports = list(data.get("schedules", {}).keys())
-    
+
     # Scenario Selection
     st.markdown("### 🎯 اختر نوع المحتوى")
-    
+
     cols = st.columns(4)
     scenarios_list = list(CONTENT_SCENARIOS.keys())
     for i, scenario in enumerate(scenarios_list):
         with cols[i % 4]:
             if st.button(scenario, key=f"scenario_{i}", use_container_width=True):
                 st.session_state.selected_scenario = scenario
-    
-    current_scenario = st.session_state.get('selected_scenario', scenarios_list[0])
-    
+
+    current_scenario = st.session_state.get("selected_scenario", scenarios_list[0])
+
     st.markdown("---")
-    
+
     # Configuration Row
     col1, col2 = st.columns([1, 1])
-    
+
     with col1:
-        selected_sport = st.selectbox(
-            "🏋️ اختر الرياضة",
-            ["عشوائي"] + sports
-        )
-    
+        selected_sport = st.selectbox("🏋️ اختر الرياضة", ["عشوائي"] + sports)
+
     with col2:
         include_cta = st.checkbox("📞 تضمين CTA", value=True)
-    
+
     st.markdown(f"**📝 النوع المختار:** {current_scenario}")
-    
+
     # Generate Button
     if st.button("✨ توليد المنشور الكامل", type="primary", use_container_width=True):
         if not groq_key:
             st.error("❌ يرجى إدخال Groq API Key")
         else:
-            chosen_sport = random.choice(sports) if selected_sport == "عشوائي" else selected_sport
+            chosen_sport = (
+                random.choice(sports) if selected_sport == "عشوائي" else selected_sport
+            )
             chosen_sport_en = SPORT_EN.get(chosen_sport, "martial arts")
-            
+
             # Progress
             progress = st.progress(0)
             status = st.empty()
-            
+
             # Step 1: Generate Text
             status.info("📝 جاري كتابة المنشور...")
             progress.progress(20)
-            
+
             scenario_data = CONTENT_SCENARIOS[current_scenario]
             base_prompt = scenario_data["prompt"].format(sport=chosen_sport)
-            
+
             cta_info = ""
             if include_cta:
                 cta_info = f"""
@@ -667,7 +705,7 @@ with tab1:
 - رقم التواصل: {data.get('phone', '')} أو {data.get('phone_alt', '')}
 - العنوان: {data.get('location', '')}
 """
-            
+
             full_prompt = f"""{base_prompt}
 
 معلومات الرياضة:
@@ -680,80 +718,88 @@ with tab1:
 
 اكتب المنشور باللغة العربية المصرية، استخدم إيموجي بشكل جذاب.
 4-6 جمل فقط."""
-            
+
             client, model = get_ai_client("Groq", groq_key)
             if client:
                 post_text = generate_ai_response(
-                    client, model,
-                    COACH_SYSTEM_PROMPT,
-                    full_prompt,
-                    data
+                    client, model, COACH_SYSTEM_PROMPT, full_prompt, data
                 )
             else:
                 post_text = "❌ فشل توليد النص"
-            
+
             progress.progress(50)
-            
+
             # Step 2: Get Image
             image_url = None
-            
+
             status.info("📰 جاري البحث عن صور من المصادر...")
             progress.progress(70)
-            
+
             rss_images = fetch_rss_images(chosen_sport, data)
-            
+
             if rss_images:
                 # Show image options
                 st.session_state.rss_images = rss_images
                 st.session_state.post_text = post_text
                 st.session_state.chosen_sport = chosen_sport
-                st.session_state.image_url = rss_images[0]['url'] # Default to first RSS image
+                st.session_state.image_url = rss_images[0][
+                    "url"
+                ]  # Default to first RSS image
             else:
-                st.warning("⚠️ لم يتم العثور على صور حديثة في المصادر، سيتم استخدام صورة احتياطية.")
+                st.warning(
+                    "⚠️ لم يتم العثور على صور حديثة في المصادر، سيتم استخدام صورة احتياطية."
+                )
                 fb_img = random.choice(FALLBACK_IMAGES)
                 st.session_state.image_url = fb_img
                 st.image(fb_img, caption="صورة احتياطية (من المجموعة)", width=300)
-            
+
             progress.progress(100)
             status.success("✅ تم!")
-            
+
             # Save to session state to display outside the button loop
             st.session_state.post_generated = True
 
     # Display Results (Outside the button loop to persist)
-    if st.session_state.get('post_generated') and st.session_state.get('post_text'):
+    if st.session_state.get("post_generated") and st.session_state.get("post_text"):
         st.markdown("---")
         st.markdown("### 📝 المنشور الجاهز:")
-        st.markdown(f'<div class="generated-post">{st.session_state.post_text}</div>', unsafe_allow_html=True)
-        
+        st.markdown(
+            f'<div class="generated-post">{st.session_state.post_text}</div>',
+            unsafe_allow_html=True,
+        )
+
         # Text copy area
         st.text_area("📋 انسخ النص:", st.session_state.post_text, height=150)
-        
+
         # Show images if available
-        current_image_url = st.session_state.get('image_url')
-        
-        if 'rss_images' in st.session_state and st.session_state.rss_images:
+        current_image_url = st.session_state.get("image_url")
+
+        if "rss_images" in st.session_state and st.session_state.rss_images:
             st.markdown("### 🖼️ اختر صورة من المصادر:")
             img_cols = st.columns(min(3, len(st.session_state.rss_images)))
             for i, img in enumerate(st.session_state.rss_images[:3]):
                 with img_cols[i]:
                     try:
-                        st.image(img['url'], caption=img.get('source', ''), use_container_width=True)
+                        st.image(
+                            img["url"],
+                            caption=img.get("source", ""),
+                            use_container_width=True,
+                        )
                         if st.button("اختر هذه الصورة", key=f"sel_img_{i}"):
-                            current_image_url = img['url']
+                            current_image_url = img["url"]
                             st.session_state.image_url = current_image_url
                             st.success("تم اختيار الصورة")
                     except:
                         st.warning("تعذر تحميل الصورة")
-        
-        if 'generated_image' in st.session_state and st.session_state.generated_image:
+
+        if "generated_image" in st.session_state and st.session_state.generated_image:
             # Code removed: AI Generation logic is disabled
             pass
 
         # --- Facebook Posting Section ---
         st.markdown("---")
         st.markdown("### 🚀 نشر مباشر على فيسبوك")
-        
+
         col_pub1, col_pub2 = st.columns([1, 2])
         with col_pub1:
             if st.button("📘 انشر الآن", type="primary", use_container_width=True):
@@ -762,9 +808,9 @@ with tab1:
                 else:
                     with st.spinner("جاري النشر..."):
                         res, err_msg = post_to_facebook_page(
-                            st.session_state.post_text, 
-                            fb_token, 
-                            st.session_state.get('image_url')
+                            st.session_state.post_text,
+                            fb_token,
+                            st.session_state.get("image_url"),
                         )
                         if res:
                             st.success(f"✅ تم النشر بنجاح! ID: {res.get('id')}")
@@ -782,9 +828,12 @@ with tab2:
     # --- Configuration Section ---
     with st.expander("⚙️ إعدادات الشخصية والجدولة (تحكم حي)", expanded=False):
         st.info("💡 هذه الإعدادات سترسل إلى سيرفر البوت فوراً.")
-        
+
         # Webhook URL (Render)
-        webhook_url = st.text_input("رابط سيرفر البوت (Render URL)", placeholder="https://academy-webhook.onrender.com")
+        webhook_url = st.text_input(
+            "رابط سيرفر البوت (Render URL)",
+            placeholder="https://academy-webhook.onrender.com",
+        )
 
         col1, col2 = st.columns(2)
         with col1:
@@ -794,18 +843,18 @@ with tab2:
                 options=list(range(24)),
                 default=[9, 11, 14, 17, 20, 22],
                 format_func=lambda x: f"{x}:00",
-                key="cfg_hours"
+                key="cfg_hours",
             )
-        
+
         with col2:
             st.markdown("### 🎭 إعدادات الشخصية")
             new_captain_mood = st.select_slider(
                 "مود الكابتن",
                 options=["رسمي جداً", "متوازن", "حماسي جداً"],
                 value="حماسي جداً",
-                key="cfg_mood"
+                key="cfg_mood",
             )
-            
+
         st.markdown("### 📰 مصادر الأخبار (RSS)")
         default_rss = """https://feeds.feedburner.com/karatemart
 https://kaizenfitnessusa.com/blog?format=rss
@@ -831,59 +880,97 @@ https://changingthegameproject.com/feed/
 https://breakingmuscle.com/feed/
 https://www.skysewsports.com/rss
 https://www.youm7.com/rss/SectionRss?SectionID=298"""
-        
+
         new_rss_feeds_text = st.text_area(
-            "روابط RSS (رابط في كل سطر)",
-            value=default_rss,
-            key="cfg_rss"
+            "روابط RSS (رابط في كل سطر)", value=default_rss, key="cfg_rss"
         )
-        
+
         if st.button("💾 حفظ الإعدادات وتحديث البوت", type="primary"):
             if not webhook_url:
                 st.error("❌ يرجى إدخال رابط سيرفر Render أولاً!")
             else:
                 # Prepare Payload
-                feeds_list = [line.strip() for line in new_rss_feeds_text.split('\n') if line.strip()]
+                feeds_list = [
+                    line.strip()
+                    for line in new_rss_feeds_text.split("\n")
+                    if line.strip()
+                ]
                 payload = {
                     "active_hours": new_active_hours,
                     "mood": new_captain_mood,
-                    "rss_feeds": feeds_list
+                    "rss_feeds": feeds_list,
                 }
-                
+
                 # Send to Webhook
                 try:
                     # Clean URL
-                    if webhook_url.endswith('/'):
+                    if webhook_url.endswith("/"):
                         webhook_url = webhook_url[:-1]
-                    
+
                     # Assuming secret is hardcoded or user inputs it (Using the hardcoded one for simplicity as per webhook.py)
-                    cron_secret = "my_secret_cron_key_123" 
-                    
+                    cron_secret = "my_secret_cron_key_123"
+
                     update_url = f"{webhook_url}/update-config?secret={cron_secret}"
-                    
+
                     with st.spinner("جاري الاتصال بالسيرفر وتحديث العقل..."):
                         resp = requests.post(update_url, json=payload, timeout=10)
-                        
+
                         if resp.status_code == 200:
-                            st.success(f"✅ تم تحديث البوت بنجاح! ({resp.json().get('status')})")
-                            st.json(resp.json().get('config'))
+                            st.success(
+                                f"✅ تم تحديث البوت بنجاح! ({resp.json().get('status')})"
+                            )
+                            st.json(resp.json().get("config"))
                         else:
                             st.error(f"❌ فشل التحديث: {resp.text}")
-                            
+
                 except Exception as e:
                     st.error(f"❌ خطأ في الاتصال: {e}")
+
+        # System Status Check
+        st.markdown("---")
+        st.markdown("### 🚦 حالة النظام")
+        col_s1, col_s2 = st.columns([1, 3])
+        with col_s1:
+            if st.button("🔄 فحص الحالة الحالية"):
+                if not webhook_url:
+                    st.warning("أدخل رابط السيرفر أولاً")
+                else:
+                    try:
+                        # Clean URL
+                        if webhook_url.endswith("/"):
+                            webhook_url = webhook_url[:-1]
+                            
+                        status_res = requests.get(f"{webhook_url}/status", timeout=5)
+                        if status_res.status_code == 200:
+                            st.session_state.bot_status = status_res.json()
+                        else:
+                            st.error("السيرفر لا يستجيب بالشكل الصحيح")
+                    except Exception as e:
+                        st.error(f"فشل الاتصال: {e}")
+        
+        with col_s2:
+            if 'bot_status' in st.session_state:
+                bs = st.session_state.bot_status
+                st.info(f"""
+                - **الحالة:** {bs.get('status')} ✅
+                - **توقيت السيرفر:** {bs.get('time_cairo')}
+                - **الساعات النشطة:** {bs.get('active_hours')}
+                - **عدد المصادر:** {bs.get('rss_count')}
+                - **مزاج الكابتن:** {bs.get('mood')}
+                - **آخر نشر تلقائي:** {bs.get('last_post_hour')}
+                """)
 
     st.divider()
 
     # --- Simulation Section ---
     st.markdown("### 🧪 اختبار المحتوى التلقائي")
     st.markdown("اضغط الزر لمحاكاة ما سيفعله البوت **لو كان الوقت الآن هو:**")
-    
+
     sim_hour = st.slider("اختر ساعة للمحاكاة", 0, 23, 10, format="%d:00")
-    
+
     if st.button("🔄 محاكاة دورة النشر (Test Run)", type="primary"):
         st.markdown("---")
-        
+
         # 1. Determine Logic based on time
         post_type = "general"
         if 8 <= sim_hour < 11:
@@ -900,11 +987,11 @@ https://www.youm7.com/rss/SectionRss?SectionID=298"""
             post_type = "😴 وقت النوم (لن يتم نشر شيء)"
 
         col_res1, col_res2 = st.columns([1, 2])
-        
+
         with col_res1:
             st.markdown(f"**⏰ الساعة:** `{sim_hour}:00`")
             st.markdown(f"**🎯 نوع المنشور:** `{post_type}`")
-            
+
             if "النوم" in post_type:
                 st.warning("💤 الكابتن نايم دلوقتي. السيستم مش هينشر حاجة.")
             else:
@@ -915,7 +1002,7 @@ https://www.youm7.com/rss/SectionRss?SectionID=298"""
                 with st.spinner("جاري استدعاء كابتن عز لكتابة المنشور..."):
                     # Simulation Logic
                     default_img = "https://i.ibb.co/xKGpF5sQ/469991854-122136396014386621-3832266993418146234-n.jpg"
-                    
+
                     # Try getting RSS Mock
                     has_rss = random.choice([True, False])
                     rss_data = None
@@ -923,17 +1010,19 @@ https://www.youm7.com/rss/SectionRss?SectionID=298"""
                         rss_data = {
                             "title": "فوائد مذهلة لممارسة الرياضة صباحاً",
                             "link": "http://example.com/sport-news",
-                            "image": default_img
+                            "image": default_img,
                         }
-                    
+
                     # Generate Prompt
                     sim_prompt = f"اكتب بوست فيسبوك عن {post_type}"
                     if rss_data:
                         sim_prompt += f" مستوحي من خبر بعنوان: {rss_data['title']}"
-                    
+
                     client, model = get_ai_client("Groq", groq_key)
                     if client:
-                        mock_response = generate_ai_response(client, model, COACH_SYSTEM_PROMPT, sim_prompt, data)
+                        mock_response = generate_ai_response(
+                            client, model, COACH_SYSTEM_PROMPT, sim_prompt, data
+                        )
                         # Save to session state
                         st.session_state.sim_response = mock_response
                         st.session_state.sim_image = default_img
@@ -942,20 +1031,27 @@ https://www.youm7.com/rss/SectionRss?SectionID=298"""
                         st.error("❌ يلزم مفتاح Groq API")
 
     # Display Simulation Result (Outside the button to persist)
-    if st.session_state.get('sim_generated'):
+    if st.session_state.get("sim_generated"):
         st.markdown("### 📝 المنشور المتوقع:")
-        st.markdown(f'<div class="generated-post">{st.session_state.sim_response}</div>', unsafe_allow_html=True)
-        
+        st.markdown(
+            f'<div class="generated-post">{st.session_state.sim_response}</div>',
+            unsafe_allow_html=True,
+        )
+
         st.markdown("### 🖼️ الصورة المختارة:")
-        st.image(st.session_state.sim_image, caption="الصورة الافتراضية (أو صورة الخبر)", width=300)
-        
+        st.image(
+            st.session_state.sim_image,
+            caption="الصورة الافتراضية (أو صورة الخبر)",
+            width=300,
+        )
+
         if fb_token:
             if st.button("📢 اعتمد وانشر ده فعلاً", key="force_pub_sim", type="primary"):
                 with st.spinner("جاري النشر..."):
                     res, err_msg = post_to_facebook_page(
-                        st.session_state.sim_response, 
-                        fb_token, 
-                        st.session_state.sim_image
+                        st.session_state.sim_response,
+                        fb_token,
+                        st.session_state.sim_image,
                     )
                     if res:
                         st.success(f"✅ تم النشر بنجاح! ID: {res.get('id')}")
@@ -968,27 +1064,26 @@ https://www.youm7.com/rss/SectionRss?SectionID=298"""
 # ========================================
 with tab3:
     st.markdown("## 💬 بوت كابتن عز - محاكي الردود")
-    
+
     data = load_academy_data()
     sports = list(data.get("schedules", {}).keys())
-    
+
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = []
-    
+
     # Quick Reply Buttons
     st.markdown("### 💡 أسئلة سريعة")
-    
+
     st.markdown("**💰 استفسارات الأسعار:**")
     cols = st.columns(len(sports))
     for i, sport in enumerate(sports):
         with cols[i]:
             if st.button(f"💰 {sport}", key=f"price_{sport}", use_container_width=True):
-                st.session_state.chat_messages.append({
-                    "role": "user", 
-                    "content": f"كام سعر {sport} وإيه المواعيد؟"
-                })
+                st.session_state.chat_messages.append(
+                    {"role": "user", "content": f"كام سعر {sport} وإيه المواعيد؟"}
+                )
                 st.rerun()
-    
+
     st.markdown("**❓ أسئلة عامة:**")
     general_questions = [
         ("📍 العنوان", "فين مكان الأكاديمية؟"),
@@ -996,52 +1091,65 @@ with tab3:
         ("👶 ابني 5 سنين", "ابني عنده 5 سنين، إيه رياضة مناسبة؟"),
         ("📞 التسجيل", "عايز أسجل، أتواصل إزاي؟"),
         ("⭐ تجربة", "في حصة تجربة؟"),
-        ("🤔 الفرق", "إيه الفرق بين الكاراتيه والكونغ فو؟")
+        ("🤔 الفرق", "إيه الفرق بين الكاراتيه والكونغ فو؟"),
     ]
-    
+
     cols = st.columns(3)
     for i, (label, question) in enumerate(general_questions):
         with cols[i % 3]:
             if st.button(label, key=f"gen_{i}", use_container_width=True):
-                st.session_state.chat_messages.append({"role": "user", "content": question})
+                st.session_state.chat_messages.append(
+                    {"role": "user", "content": question}
+                )
                 st.rerun()
-    
+
     st.markdown("---")
-    
+
     # Chat Display
     for msg in st.session_state.chat_messages:
         if msg["role"] == "user":
-            st.markdown(f'<div class="user-bubble">👤 {msg["content"]}</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="user-bubble">👤 {msg["content"]}</div>',
+                unsafe_allow_html=True,
+            )
         else:
-            st.markdown(f'<div class="bot-bubble">🥋 {msg["content"]}</div>', unsafe_allow_html=True)
-    
+            st.markdown(
+                f'<div class="bot-bubble">🥋 {msg["content"]}</div>',
+                unsafe_allow_html=True,
+            )
+
     # Process pending message
-    if st.session_state.chat_messages and st.session_state.chat_messages[-1]["role"] == "user":
+    if (
+        st.session_state.chat_messages
+        and st.session_state.chat_messages[-1]["role"] == "user"
+    ):
         if groq_key:
             with st.spinner("🤔 كابتن عز بيفكر..."):
                 client, model = get_ai_client("Groq", groq_key)
                 if client:
                     response = generate_ai_response(
-                        client, model,
+                        client,
+                        model,
                         COACH_SYSTEM_PROMPT,
                         st.session_state.chat_messages[-1]["content"],
-                        data
+                        data,
                     )
-                    st.session_state.chat_messages.append({"role": "assistant", "content": response})
+                    st.session_state.chat_messages.append(
+                        {"role": "assistant", "content": response}
+                    )
                     st.rerun()
         else:
-            st.session_state.chat_messages.append({
-                "role": "assistant", 
-                "content": "❌ محتاج Groq API Key!"
-            })
+            st.session_state.chat_messages.append(
+                {"role": "assistant", "content": "❌ محتاج Groq API Key!"}
+            )
             st.rerun()
-    
+
     # Chat Input
     user_input = st.chat_input("اكتب سؤالك...")
     if user_input:
         st.session_state.chat_messages.append({"role": "user", "content": user_input})
         st.rerun()
-    
+
     # Clear
     if st.button("🗑️ مسح المحادثة"):
         st.session_state.chat_messages = []
@@ -1052,9 +1160,9 @@ with tab3:
 # ========================================
 with tab3:
     st.markdown("## ⚙️ الإعدادات")
-    
+
     data = load_academy_data()
-    
+
     with st.expander("📋 المعلومات الأساسية", expanded=True):
         col1, col2 = st.columns(2)
         with col1:
@@ -1063,25 +1171,31 @@ with tab3:
             phone = st.text_input("الهاتف", value=data.get("phone", ""))
             phone_alt = st.text_input("هاتف بديل", value=data.get("phone_alt", ""))
         with col2:
-            location = st.text_area("العنوان", value=data.get("location", ""), height=80)
+            location = st.text_area(
+                "العنوان", value=data.get("location", ""), height=80
+            )
             map_link = st.text_input("رابط الخريطة", value=data.get("map_link", ""))
             facebook = st.text_input("فيسبوك", value=data.get("facebook", ""))
-    
+
     with st.expander("📅 المواعيد"):
         schedules = data.get("schedules", {})
         updated_schedules = {}
         for sport, times in schedules.items():
             times_str = ", ".join(times) if isinstance(times, list) else str(times)
             new_time = st.text_input(f"{sport}", value=times_str, key=f"sched_{sport}")
-            updated_schedules[sport] = [t.strip() for t in new_time.split(",")] if "," in new_time else [new_time]
-    
+            updated_schedules[sport] = (
+                [t.strip() for t in new_time.split(",")]
+                if "," in new_time
+                else [new_time]
+            )
+
     with st.expander("💰 الأسعار"):
         pricing = data.get("pricing", {})
         updated_pricing = {}
         for sport, price in pricing.items():
             new_price = st.text_input(f"{sport}", value=price, key=f"price_set_{sport}")
             updated_pricing[sport] = new_price
-    
+
     with st.expander("🎁 العروض"):
         offers = data.get("offers", [])
         updated_offers = []
@@ -1092,7 +1206,7 @@ with tab3:
         new_offer_text = st.text_input("➕ عرض جديد", key="new_offer")
         if new_offer_text:
             updated_offers.append(new_offer_text)
-    
+
     if st.button("💾 حفظ", type="primary", use_container_width=True):
         updated_data = {
             "academy_name": academy_name,
@@ -1106,7 +1220,7 @@ with tab3:
             "pricing": updated_pricing or data.get("pricing", {}),
             "offers": updated_offers or data.get("offers", []),
             "system_prompt": COACH_SYSTEM_PROMPT,
-            "content_sources": data.get("content_sources", {})
+            "content_sources": data.get("content_sources", {}),
         }
         save_academy_data(updated_data)
         st.success("✅ تم الحفظ!")
@@ -1117,41 +1231,49 @@ with tab3:
 # ========================================
 with tab4:
     st.markdown("## 📊 نظرة عامة")
-    
+
     data = load_academy_data()
-    
-    st.markdown(f"""
+
+    st.markdown(
+        f"""
     <div class="info-banner">
         <h3 style="margin:0;">🥋 {data.get('academy_name', '')}</h3>
         <p style="margin:0;">📍 {data.get('location', '')}</p>
     </div>
-    """, unsafe_allow_html=True)
-    
+    """,
+        unsafe_allow_html=True,
+    )
+
     # Stats
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("🏋️ رياضات", len(data.get('schedules', {})))
+        st.metric("🏋️ رياضات", len(data.get("schedules", {})))
     with col2:
-        st.metric("🎁 عروض", len(data.get('offers', [])))
+        st.metric("🎁 عروض", len(data.get("offers", [])))
     with col3:
-        st.metric("📰 مصادر RSS", sum(len(v) for v in data.get('content_sources', {}).values()))
+        st.metric(
+            "📰 مصادر RSS",
+            sum(len(v) for v in data.get("content_sources", {}).values()),
+        )
     with col4:
         st.metric("📝 أنواع محتوى", len(CONTENT_SCENARIOS))
-    
+
     st.markdown("---")
-    
+
     # Schedule Table
     st.markdown("### 📅 المواعيد والأسعار")
     table_data = []
     for sport in data.get("schedules", {}):
-        table_data.append({
-            "الرياضة": sport,
-            "المواعيد": ", ".join(data.get("schedules", {}).get(sport, [])),
-            "السعر": data.get("pricing", {}).get(sport, "غير محدد")
-        })
+        table_data.append(
+            {
+                "الرياضة": sport,
+                "المواعيد": ", ".join(data.get("schedules", {}).get(sport, [])),
+                "السعر": data.get("pricing", {}).get(sport, "غير محدد"),
+            }
+        )
     if table_data:
         st.table(table_data)
-    
+
     # Offers
     st.markdown("### 🎁 العروض")
     for offer in data.get("offers", []):
@@ -1159,9 +1281,12 @@ with tab4:
 
 # --- Footer ---
 st.markdown("---")
-st.markdown("""
+st.markdown(
+    """
 <div style="text-align: center; color: #888; padding: 1rem;">
     🥋 <strong>أكاديمية أبطال أكتوبر</strong> - v3.0 مع توليد الصور<br>
     <small>Groq + NVIDIA FLUX + ImgBB 🚀</small>
 </div>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)

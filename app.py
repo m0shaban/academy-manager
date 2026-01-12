@@ -460,13 +460,15 @@ st.markdown("""
     }
     
     .generated-post {
-        background: linear-gradient(135deg, #fff9c4 0%, #fff59d 100%);
+        background: #ffffff;
         padding: 1.5rem;
         border-radius: 15px;
         border-right: 5px solid #ffc107;
         margin: 1rem 0;
-        box-shadow: 0 4px 15px rgba(255,193,7,0.3);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        color: #333;
         direction: rtl;
+        border: 1px solid #f0f0f0;
     }
     
     .image-option {
@@ -876,16 +878,36 @@ with tab2:
                         sim_prompt += f" مستوحي من خبر بعنوان: {rss_data['title']}"
                     
                     client, model = get_ai_client("Groq", groq_key)
-                    mock_response = generate_ai_response(client, model, COACH_SYSTEM_PROMPT, sim_prompt, data)
-                    
-                    st.markdown("### 📝 المنشور المتوقع:")
-                    st.markdown(f'<div class="generated-post">{mock_response}</div>', unsafe_allow_html=True)
-                    
-                    st.markdown("### 🖼️ الصورة المختارة:")
-                    st.image(default_img, caption="الصورة الافتراضية (أو صورة الخبر)", width=300)
-                    
-                    if fb_token:
-                        st.button("📢 اعتمد وانشر ده فعلاً", key="force_pub_sim")
+                    if client:
+                        mock_response = generate_ai_response(client, model, COACH_SYSTEM_PROMPT, sim_prompt, data)
+                        # Save to session state
+                        st.session_state.sim_response = mock_response
+                        st.session_state.sim_image = default_img
+                        st.session_state.sim_generated = True
+                    else:
+                        st.error("❌ يلزم مفتاح Groq API")
+
+    # Display Simulation Result (Outside the button to persist)
+    if st.session_state.get('sim_generated'):
+        st.markdown("### 📝 المنشور المتوقع:")
+        st.markdown(f'<div class="generated-post">{st.session_state.sim_response}</div>', unsafe_allow_html=True)
+        
+        st.markdown("### 🖼️ الصورة المختارة:")
+        st.image(st.session_state.sim_image, caption="الصورة الافتراضية (أو صورة الخبر)", width=300)
+        
+        if fb_token:
+            if st.button("📢 اعتمد وانشر ده فعلاً", key="force_pub_sim", type="primary"):
+                with st.spinner("جاري النشر..."):
+                    res, err_msg = post_to_facebook_page(
+                        st.session_state.sim_response, 
+                        fb_token, 
+                        st.session_state.sim_image
+                    )
+                    if res:
+                        st.success(f"✅ تم النشر بنجاح! ID: {res.get('id')}")
+                        st.balloons()
+                    else:
+                        st.error(err_msg)
 
 # ========================================
 # TAB 3: Chat Bot (Support)

@@ -250,7 +250,8 @@ def generate_response(message):
     for offer in ACADEMY_DATA['offers']:
         context += f"- {offer}\n"
     
-    full_system_prompt = f"{SYSTEM_PROMPT}\n\n{context}"
+    mood_prompt = get_mood_prompt(BOT_CONFIG.get("system_prompt_mood", "حماسي جداً"))
+    full_system_prompt = f"{SYSTEM_PROMPT_BASE}\n{mood_prompt}\n\n{context}"
     
     try:
         response = client.chat.completions.create(

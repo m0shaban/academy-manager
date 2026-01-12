@@ -56,28 +56,39 @@ except FileNotFoundError:
     PAGE_ACCESS_TOKEN = ""
 
 def post_to_facebook_page(message, access_token, image_url=None):
-    """Post content to Facebook Page Feed."""
+    """Post content to Facebook Page Feed (Robust Mode)."""
     if not access_token:
         return None, "❌ لم يتم العثور على Page Access Token"
         
-    url = f"https://graph.facebook.com/v18.0/me/feed"
     params = {"access_token": access_token}
     
+    # محاولة 1: النشر كصورة (شكل أفضل)
+    if image_url:
+        try:
+            url = f"https://graph.facebook.com/v18.0/me/photos"
+            data = {"url": image_url, "caption": message}
+            response = requests.post(url, params=params, json=data, timeout=30)
+            
+            # إذا نجح، ارجع فوراً
+            if response.status_code == 200:
+                return response.json(), None
+            else:
+                print(f"⚠️ فشل نشر الصورة مباشرة ({response.status_code})، جاري المحاولة كرابط...")
+        except Exception as e:
+            print(f"⚠️ خطأ في نشر الصورة: {e}")
+
+    # محاولة 2 (البديل المضمون): النشر كبوست عادي مع رابط
+    url = f"https://graph.facebook.com/v18.0/me/feed"
     data = {"message": message}
     if image_url:
         data["link"] = image_url
-        # If posting an image, sometimes 'url' parameter is better for photos endpoint, 
-        # but 'link' works for feed posts.
-        # For photos endpoint (better for engagement):
-        url = f"https://graph.facebook.com/v18.0/me/photos"
-        data = {"url": image_url, "caption": message}
-    
+        
     try:
         response = requests.post(url, params=params, json=data, timeout=30)
         response.raise_for_status()
         return response.json(), None
     except Exception as e:
-        return None, f"❌ خطأ في النشر على فيسبوك: {str(e)}"
+        return None, f"❌ خطأ نهائي في النشر على فيسبوك: {str(e)}"
 
 # --- Content Scenarios ---
 CONTENT_SCENARIOS = {

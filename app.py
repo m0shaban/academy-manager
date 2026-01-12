@@ -523,27 +523,17 @@ with st.sidebar:
     
     # Check for API keys
     groq_key = GROQ_API_KEY or st.text_input("Groq API Key", type="password", key="groq_input")
-    nvidia_key = NVIDIA_API_KEY or st.text_input("NVIDIA API Key", type="password", key="nvidia_input")
-    imgbb_key = IMGBB_API_KEY or st.text_input("ImgBB API Key", type="password", key="imgbb_input")
+    # nvidia_key = NVIDIA_API_KEY or st.text_input("NVIDIA API Key", type="password", key="nvidia_input")
+    # imgbb_key = IMGBB_API_KEY or st.text_input("ImgBB API Key", type="password", key="imgbb_input")
     fb_token = PAGE_ACCESS_TOKEN or st.text_input("FB Page Token", type="password", key="fb_input")
     
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2 = st.columns(2)
     with col1:
         if groq_key:
             st.success("✅ Groq")
         else:
             st.error("❌ Groq")
     with col2:
-        if nvidia_key:
-            st.success("✅ NVIDIA")
-        else:
-            st.warning("⚠️ NVIDIA")
-    with col3:
-        if imgbb_key:
-            st.success("✅ ImgBB")
-        else:
-            st.warning("⚠️ ImgBB")
-    with col4:
         if fb_token:
             st.success("✅ FB")
         else:
@@ -610,7 +600,7 @@ with tab1:
     st.markdown("---")
     
     # Configuration Row
-    col1, col2, col3 = st.columns([2, 2, 2])
+    col1, col2 = st.columns([1, 1])
     
     with col1:
         selected_sport = st.selectbox(
@@ -619,13 +609,6 @@ with tab1:
         )
     
     with col2:
-        image_source = st.radio(
-            "🖼️ مصدر الصورة",
-            ["📰 من RSS (مجاني)", "🎨 توليد AI (NVIDIA)"],
-            horizontal=True
-        )
-    
-    with col3:
         include_cta = st.checkbox("📞 تضمين CTA", value=True)
     
     st.markdown(f"**📝 النوع المختار:** {current_scenario}")
@@ -686,45 +669,19 @@ with tab1:
             
             # Step 2: Get Image
             image_url = None
-            image_base64 = None
             
-            if "RSS" in image_source:
-                status.info("📰 جاري البحث عن صور من المصادر...")
-                progress.progress(70)
-                
-                rss_images = fetch_rss_images(chosen_sport, data)
-                
-                if rss_images:
-                    # Show image options
-                    st.session_state.rss_images = rss_images
-                    st.session_state.post_text = post_text
-                    st.session_state.chosen_sport = chosen_sport
-                else:
-                    st.warning("لم يتم العثور على صور في RSS - جرب توليد AI")
+            status.info("📰 جاري البحث عن صور من المصادر...")
+            progress.progress(70)
             
-            else:  # AI Generation
-                if not nvidia_key:
-                    st.error("❌ يرجى إدخال NVIDIA API Key لتوليد الصور")
-                else:
-                    status.info("🎨 جاري توليد الصورة بالذكاء الاصطناعي...")
-                    progress.progress(70)
-                    
-                    image_prompt = scenario_data.get("image_prompt", "").format(sport=chosen_sport_en)
-                    image_base64, error = generate_nvidia_image(image_prompt, nvidia_key)
-                    
-                    if image_base64:
-                        # Upload to ImgBB
-                        if imgbb_key:
-                            status.info("📤 جاري رفع الصورة...")
-                            progress.progress(85)
-                            image_url, upload_error = upload_to_imgbb(image_base64, imgbb_key)
-                            if upload_error:
-                                st.warning(upload_error)
-                        
-                        st.session_state.generated_image = image_base64
-                        st.session_state.image_url = image_url
-                    else:
-                        st.error(error or "فشل توليد الصورة")
+            rss_images = fetch_rss_images(chosen_sport, data)
+            
+            if rss_images:
+                # Show image options
+                st.session_state.rss_images = rss_images
+                st.session_state.post_text = post_text
+                st.session_state.chosen_sport = chosen_sport
+            else:
+                st.warning("⚠️ لم يتم العثور على صور في المصادر (RSS). يمكنك استخدام صورة من جهازك عند النشر يدوياً.")
             
             progress.progress(100)
             status.success("✅ تم!")
@@ -759,15 +716,8 @@ with tab1:
                         st.warning("تعذر تحميل الصورة")
         
         if 'generated_image' in st.session_state and st.session_state.generated_image:
-            st.markdown("### 🎨 الصورة المُولَّدة:")
-            try:
-                image_bytes = base64.b64decode(st.session_state.generated_image)
-                st.image(image_bytes, caption="صورة مُولَّدة بالذكاء الاصطناعي", use_container_width=True)
-                
-                if st.session_state.get('image_url'):
-                    st.success(f"🔗 رابط الصورة: {st.session_state.image_url}")
-            except Exception as e:
-                st.error(f"خطأ في عرض الصورة: {e}")
+            # Code removed: AI Generation logic is disabled
+            pass
 
         # --- Facebook Posting Section ---
         st.markdown("---")

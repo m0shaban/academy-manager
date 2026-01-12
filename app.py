@@ -439,6 +439,622 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# --- Premium UI/UX CSS ---
+st.markdown("""
+<style>
+/* ===== PREMIUM DARK THEME ===== */
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap');
+
+/* Root Variables */
+:root {
+    --primary: #6366f1;
+    --primary-light: #818cf8;
+    --primary-dark: #4f46e5;
+    --secondary: #10b981;
+    --accent: #f59e0b;
+    --danger: #ef4444;
+    --bg-dark: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-hover: #334155;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --border: #334155;
+    --gradient-1: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #d946ef 100%);
+    --gradient-2: linear-gradient(135deg, #10b981 0%, #14b8a6 100%);
+    --gradient-3: linear-gradient(135deg, #f59e0b 0%, #f97316 100%);
+    --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    --shadow-sm: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+/* Global Styles */
+* {
+    font-family: 'Cairo', sans-serif !important;
+}
+
+.stApp {
+    background: var(--bg-dark) !important;
+}
+
+/* Main Container */
+.main .block-container {
+    padding: 1rem 1rem 3rem 1rem !important;
+    max-width: 100% !important;
+}
+
+/* Hide Streamlit Branding */
+#MainMenu, footer, header {
+    visibility: hidden;
+}
+
+/* ===== HERO HEADER ===== */
+.hero-header {
+    background: var(--gradient-1);
+    border-radius: 24px;
+    padding: 2.5rem 2rem;
+    margin-bottom: 2rem;
+    text-align: center;
+    box-shadow: var(--shadow);
+    position: relative;
+    overflow: hidden;
+}
+
+.hero-header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 50%);
+    animation: pulse 4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+.hero-header h1 {
+    color: white !important;
+    font-size: clamp(1.5rem, 5vw, 2.5rem) !important;
+    font-weight: 900 !important;
+    margin: 0 !important;
+    text-shadow: 2px 2px 10px rgba(0,0,0,0.3);
+    position: relative;
+    z-index: 1;
+}
+
+.hero-header p {
+    color: rgba(255,255,255,0.9) !important;
+    font-size: clamp(0.9rem, 2.5vw, 1.1rem) !important;
+    margin: 0.5rem 0 0 0 !important;
+    position: relative;
+    z-index: 1;
+}
+
+/* ===== TABS STYLING ===== */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+    background: var(--bg-card);
+    padding: 8px;
+    border-radius: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.stTabs [data-baseweb="tab"] {
+    background: transparent !important;
+    color: var(--text-secondary) !important;
+    border-radius: 12px !important;
+    padding: 12px 20px !important;
+    font-weight: 600 !important;
+    font-size: clamp(0.75rem, 2vw, 0.9rem) !important;
+    border: none !important;
+    transition: all 0.3s ease !important;
+}
+
+.stTabs [data-baseweb="tab"]:hover {
+    background: var(--bg-card-hover) !important;
+    color: var(--text-primary) !important;
+}
+
+.stTabs [aria-selected="true"] {
+    background: var(--gradient-1) !important;
+    color: white !important;
+}
+
+.stTabs [data-baseweb="tab-highlight"] {
+    display: none;
+}
+
+.stTabs [data-baseweb="tab-border"] {
+    display: none;
+}
+
+/* ===== CARDS & CONTAINERS ===== */
+.premium-card {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 20px !important;
+    padding: 1.5rem !important;
+    margin-bottom: 1rem !important;
+    box-shadow: var(--shadow-sm) !important;
+    transition: all 0.3s ease !important;
+}
+
+.premium-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--primary) !important;
+    box-shadow: 0 20px 40px -15px rgba(99, 102, 241, 0.3) !important;
+}
+
+/* ===== INPUTS & TEXT AREAS ===== */
+.stTextInput > div > div > input,
+.stTextArea > div > div > textarea,
+.stSelectbox > div > div > div,
+.stNumberInput > div > div > input {
+    background: var(--bg-card) !important;
+    border: 2px solid var(--border) !important;
+    border-radius: 12px !important;
+    color: var(--text-primary) !important;
+    padding: 12px 16px !important;
+    font-size: 1rem !important;
+    transition: all 0.3s ease !important;
+}
+
+.stTextInput > div > div > input:focus,
+.stTextArea > div > div > textarea:focus,
+.stNumberInput > div > div > input:focus {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2) !important;
+}
+
+.stTextInput > div > div > input::placeholder,
+.stTextArea > div > div > textarea::placeholder {
+    color: var(--text-secondary) !important;
+}
+
+/* Labels */
+.stTextInput label,
+.stTextArea label,
+.stSelectbox label,
+.stNumberInput label,
+.stCheckbox label,
+.stRadio label {
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+    font-size: 0.95rem !important;
+}
+
+/* ===== BUTTONS ===== */
+.stButton > button {
+    background: var(--gradient-1) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 12px !important;
+    padding: 12px 24px !important;
+    font-weight: 700 !important;
+    font-size: 1rem !important;
+    transition: all 0.3s ease !important;
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4) !important;
+}
+
+.stButton > button:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 25px rgba(99, 102, 241, 0.5) !important;
+}
+
+.stButton > button:active {
+    transform: translateY(0) !important;
+}
+
+/* Secondary Buttons */
+.stButton > button[kind="secondary"] {
+    background: var(--bg-card) !important;
+    border: 2px solid var(--border) !important;
+    color: var(--text-primary) !important;
+    box-shadow: none !important;
+}
+
+/* Download Button */
+.stDownloadButton > button {
+    background: var(--gradient-2) !important;
+    box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4) !important;
+}
+
+/* ===== EXPANDERS ===== */
+.streamlit-expanderHeader {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 16px !important;
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+    padding: 1rem 1.25rem !important;
+    transition: all 0.3s ease !important;
+}
+
+.streamlit-expanderHeader:hover {
+    border-color: var(--primary) !important;
+    background: var(--bg-card-hover) !important;
+}
+
+.streamlit-expanderContent {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-top: none !important;
+    border-radius: 0 0 16px 16px !important;
+    padding: 1.25rem !important;
+}
+
+/* ===== METRICS ===== */
+[data-testid="stMetricValue"] {
+    color: var(--primary-light) !important;
+    font-size: clamp(1.5rem, 4vw, 2rem) !important;
+    font-weight: 900 !important;
+}
+
+[data-testid="stMetricLabel"] {
+    color: var(--text-secondary) !important;
+    font-weight: 600 !important;
+}
+
+[data-testid="metric-container"] {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 16px !important;
+    padding: 1.25rem !important;
+}
+
+/* ===== ALERTS & INFO BOXES ===== */
+.stAlert {
+    border-radius: 16px !important;
+    border: none !important;
+    padding: 1rem 1.25rem !important;
+}
+
+.stAlert[data-baseweb="notification"] {
+    background: rgba(99, 102, 241, 0.15) !important;
+    color: var(--primary-light) !important;
+}
+
+.stSuccess {
+    background: rgba(16, 185, 129, 0.15) !important;
+    color: #34d399 !important;
+}
+
+.stError {
+    background: rgba(239, 68, 68, 0.15) !important;
+    color: #f87171 !important;
+}
+
+.stWarning {
+    background: rgba(245, 158, 11, 0.15) !important;
+    color: #fbbf24 !important;
+}
+
+/* ===== SIDEBAR ===== */
+[data-testid="stSidebar"] {
+    background: var(--bg-card) !important;
+    border-right: 1px solid var(--border) !important;
+}
+
+[data-testid="stSidebar"] .block-container {
+    padding: 1.5rem 1rem !important;
+}
+
+/* ===== TABLES ===== */
+.stDataFrame {
+    border-radius: 16px !important;
+    overflow: hidden !important;
+}
+
+.stDataFrame table {
+    background: var(--bg-card) !important;
+}
+
+.stDataFrame th {
+    background: var(--bg-card-hover) !important;
+    color: var(--text-primary) !important;
+    font-weight: 700 !important;
+}
+
+.stDataFrame td {
+    color: var(--text-secondary) !important;
+    border-color: var(--border) !important;
+}
+
+/* ===== PROGRESS BAR ===== */
+.stProgress > div > div {
+    background: var(--bg-card-hover) !important;
+    border-radius: 10px !important;
+}
+
+.stProgress > div > div > div {
+    background: var(--gradient-1) !important;
+    border-radius: 10px !important;
+}
+
+/* ===== CHAT BUBBLES ===== */
+.user-bubble {
+    background: var(--gradient-1) !important;
+    color: white !important;
+    padding: 1rem 1.25rem !important;
+    border-radius: 20px 20px 5px 20px !important;
+    margin: 0.75rem 0 !important;
+    max-width: 85% !important;
+    margin-left: auto !important;
+    box-shadow: var(--shadow-sm) !important;
+}
+
+.bot-bubble {
+    background: var(--bg-card) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border) !important;
+    padding: 1rem 1.25rem !important;
+    border-radius: 20px 20px 20px 5px !important;
+    margin: 0.75rem 0 !important;
+    max-width: 85% !important;
+    box-shadow: var(--shadow-sm) !important;
+}
+
+/* ===== GENERATED POST ===== */
+.generated-post {
+    background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-card-hover) 100%) !important;
+    border: 2px solid var(--primary) !important;
+    border-radius: 20px !important;
+    padding: 1.5rem !important;
+    color: var(--text-primary) !important;
+    line-height: 1.8 !important;
+    font-size: 1.05rem !important;
+    box-shadow: 0 10px 40px rgba(99, 102, 241, 0.2) !important;
+}
+
+/* ===== INFO BANNER ===== */
+.info-banner {
+    background: var(--gradient-2) !important;
+    border-radius: 20px !important;
+    padding: 1.5rem 2rem !important;
+    color: white !important;
+    text-align: center !important;
+    box-shadow: var(--shadow-sm) !important;
+    margin-bottom: 1.5rem !important;
+}
+
+.info-banner h3 {
+    margin: 0 !important;
+    font-size: clamp(1.1rem, 3vw, 1.4rem) !important;
+}
+
+.info-banner p {
+    margin: 0.5rem 0 0 0 !important;
+    opacity: 0.9 !important;
+}
+
+/* ===== SETUP GUIDE ===== */
+.setup-step {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 16px !important;
+    padding: 1.25rem !important;
+    margin-bottom: 1rem !important;
+    display: flex !important;
+    align-items: flex-start !important;
+    gap: 1rem !important;
+    transition: all 0.3s ease !important;
+}
+
+.setup-step:hover {
+    border-color: var(--primary) !important;
+    transform: translateX(5px) !important;
+}
+
+.step-number {
+    background: var(--gradient-1) !important;
+    color: white !important;
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-weight: 900 !important;
+    font-size: 1.1rem !important;
+    flex-shrink: 0 !important;
+}
+
+.step-content h4 {
+    color: var(--text-primary) !important;
+    margin: 0 0 0.5rem 0 !important;
+    font-size: 1.05rem !important;
+}
+
+.step-content p {
+    color: var(--text-secondary) !important;
+    margin: 0 !important;
+    font-size: 0.9rem !important;
+    line-height: 1.6 !important;
+}
+
+.step-content a {
+    color: var(--primary-light) !important;
+    text-decoration: none !important;
+    font-weight: 600 !important;
+}
+
+.step-content a:hover {
+    text-decoration: underline !important;
+}
+
+/* ===== QUICK LINK CARDS ===== */
+.link-card {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 16px !important;
+    padding: 1.25rem !important;
+    text-align: center !important;
+    transition: all 0.3s ease !important;
+    text-decoration: none !important;
+    display: block !important;
+}
+
+.link-card:hover {
+    border-color: var(--primary) !important;
+    transform: translateY(-5px) !important;
+    box-shadow: 0 15px 35px rgba(99, 102, 241, 0.2) !important;
+}
+
+.link-card .icon {
+    font-size: 2.5rem !important;
+    margin-bottom: 0.75rem !important;
+}
+
+.link-card h4 {
+    color: var(--text-primary) !important;
+    margin: 0 !important;
+    font-size: 1rem !important;
+}
+
+.link-card p {
+    color: var(--text-secondary) !important;
+    margin: 0.5rem 0 0 0 !important;
+    font-size: 0.8rem !important;
+}
+
+/* ===== MOBILE RESPONSIVE ===== */
+@media (max-width: 768px) {
+    .main .block-container {
+        padding: 0.5rem !important;
+    }
+    
+    .hero-header {
+        padding: 1.5rem 1rem !important;
+        border-radius: 16px !important;
+        margin-bottom: 1rem !important;
+    }
+    
+    .stTabs [data-baseweb="tab-list"] {
+        padding: 6px !important;
+        gap: 4px !important;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        padding: 8px 12px !important;
+        font-size: 0.75rem !important;
+    }
+    
+    .premium-card {
+        padding: 1rem !important;
+        border-radius: 14px !important;
+    }
+    
+    .stButton > button {
+        padding: 10px 16px !important;
+        font-size: 0.9rem !important;
+    }
+    
+    .setup-step {
+        padding: 1rem !important;
+        flex-direction: column !important;
+        text-align: center !important;
+    }
+    
+    .step-number {
+        margin: 0 auto !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .hero-header h1 {
+        font-size: 1.3rem !important;
+    }
+    
+    .hero-header p {
+        font-size: 0.85rem !important;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        padding: 6px 10px !important;
+        font-size: 0.7rem !important;
+    }
+    
+    [data-testid="stMetricValue"] {
+        font-size: 1.3rem !important;
+    }
+}
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-dark);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+}
+
+/* ===== ANIMATIONS ===== */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.stTabs, .premium-card, .setup-step {
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* ===== CODE BLOCKS ===== */
+.stCodeBlock {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 12px !important;
+}
+
+/* ===== MULTISELECT ===== */
+.stMultiSelect [data-baseweb="tag"] {
+    background: var(--primary) !important;
+    border-radius: 8px !important;
+}
+
+/* ===== SLIDER ===== */
+.stSlider [data-baseweb="slider"] [data-testid="stThumbValue"] {
+    color: var(--text-primary) !important;
+}
+
+/* ===== CHECKBOX & RADIO ===== */
+.stCheckbox, .stRadio {
+    color: var(--text-primary) !important;
+}
+
+/* ===== FOOTER ===== */
+.premium-footer {
+    background: var(--bg-card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 20px !important;
+    padding: 1.5rem !important;
+    text-align: center !important;
+    margin-top: 2rem !important;
+}
+
+.premium-footer p {
+    color: var(--text-secondary) !important;
+    margin: 0 !important;
+}
+
+.premium-footer strong {
+    color: var(--primary-light) !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # --- Main Header ---
 data = load_academy_data()
 system_name = data.get('system_name', '🥋 مدير أكاديمية أبطال أكتوبر')
@@ -446,22 +1062,23 @@ system_subtitle = data.get('system_subtitle', 'نظام ذكي لإدارة ال
 
 st.markdown(
     f"""
-<div class="main-header">
-    <h1 style="margin:0; font-size: 2.5rem;">{system_name}</h1>
-    <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">{system_subtitle}</p>
+<div class="hero-header">
+    <h1>{system_name}</h1>
+    <p>{system_subtitle}</p>
 </div>
 """,
     unsafe_allow_html=True,
 )
 
 # --- Navigation Tabs ---
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
     [
-        "✨ مولد المحتوى",
-        "🤖 غرفة عمليات الكابتن (أتمتة)",
-        "💬 بوت الردود",
+        "✨ المحتوى",
+        "🤖 الأتمتة",
+        "💬 البوت",
         "📊 نظرة عامة",
-        "⚙️ إعدادات النظام"
+        "⚙️ الإعدادات",
+        "🚀 دليل الإعداد"
     ]
 )
 
@@ -1583,14 +2200,314 @@ with tab5:
         time.sleep(1)
         st.rerun()
 
+# ========================================
+# TAB 6: Setup Guide
+# ========================================
+with tab6:
+    st.markdown("## 🚀 دليل الإعداد الشامل للمبتدئين")
+    st.markdown("اتبع الخطوات التالية لتشغيل النظام بالكامل")
+    
+    # Quick Status Check
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        groq_status = "✅" if GROQ_API_KEY else "❌"
+        st.metric("Groq API", groq_status)
+    with col2:
+        fb_status = "✅" if PAGE_ACCESS_TOKEN else "❌"
+        st.metric("Facebook", fb_status)
+    with col3:
+        nvidia_status = "✅" if NVIDIA_API_KEY else "⚪"
+        st.metric("NVIDIA", nvidia_status)
+    with col4:
+        imgbb_status = "✅" if IMGBB_API_KEY else "⚪"
+        st.metric("ImgBB", imgbb_status)
+    
+    st.markdown("---")
+    
+    # Step 1: Groq API
+    st.markdown("""
+<div class="setup-step">
+    <div class="step-number">1</div>
+    <div class="step-content">
+        <h4>🔑 الحصول على مفتاح Groq API (مجاني)</h4>
+        <p>
+            1. اذهب إلى <a href="https://console.groq.com" target="_blank">console.groq.com</a><br>
+            2. سجل حساب جديد أو سجل دخول<br>
+            3. اضغط على "API Keys" من القائمة<br>
+            4. اضغط "Create API Key"<br>
+            5. انسخ المفتاح واحفظه
+        </p>
+    </div>
+</div>
+    """, unsafe_allow_html=True)
+    
+    # Step 2: Facebook
+    st.markdown("""
+<div class="setup-step">
+    <div class="step-number">2</div>
+    <div class="step-content">
+        <h4>📘 إعداد Facebook Page Access Token</h4>
+        <p>
+            1. اذهب إلى <a href="https://developers.facebook.com" target="_blank">developers.facebook.com</a><br>
+            2. أنشئ تطبيق جديد (Business → Other)<br>
+            3. أضف منتج "Facebook Login" و "Pages API"<br>
+            4. من Graph API Explorer، اختر صفحتك<br>
+            5. اطلب الصلاحيات: pages_manage_posts, pages_read_engagement<br>
+            6. انسخ الـ Page Access Token
+        </p>
+    </div>
+</div>
+    """, unsafe_allow_html=True)
+    
+    # Step 3: Streamlit Cloud
+    st.markdown("""
+<div class="setup-step">
+    <div class="step-number">3</div>
+    <div class="step-content">
+        <h4>☁️ نشر الواجهة على Streamlit Cloud</h4>
+        <p>
+            1. اذهب إلى <a href="https://share.streamlit.io" target="_blank">share.streamlit.io</a><br>
+            2. سجل دخول بحساب GitHub<br>
+            3. اضغط "New app"<br>
+            4. اختر Repository: <code>m0shaban/academy-manager</code><br>
+            5. Main file: <code>app.py</code><br>
+            6. اضغط "Advanced settings" وأضف الـ Secrets<br>
+            7. اضغط "Deploy!"
+        </p>
+    </div>
+</div>
+    """, unsafe_allow_html=True)
+    
+    # Step 4: Render
+    st.markdown("""
+<div class="setup-step">
+    <div class="step-number">4</div>
+    <div class="step-content">
+        <h4>🖥️ نشر الـ Webhook على Render</h4>
+        <p>
+            1. اذهب إلى <a href="https://render.com" target="_blank">render.com</a><br>
+            2. اضغط "New +" → "Web Service"<br>
+            3. اربط GitHub repo: <code>m0shaban/academy-manager</code><br>
+            4. Build Command: <code>pip install -r requirements-webhook.txt</code><br>
+            5. Start Command: <code>python webhook.py</code><br>
+            6. أضف Environment Variables<br>
+            7. انسخ الرابط بعد النشر
+        </p>
+    </div>
+</div>
+    """, unsafe_allow_html=True)
+    
+    # Step 5: UptimeRobot
+    st.markdown("""
+<div class="setup-step">
+    <div class="step-number">5</div>
+    <div class="step-content">
+        <h4>⏰ إعداد UptimeRobot للنشر التلقائي</h4>
+        <p>
+            1. اذهب إلى <a href="https://uptimerobot.com" target="_blank">uptimerobot.com</a><br>
+            2. سجل حساب مجاني<br>
+            3. اضغط "Add New Monitor"<br>
+            4. اختر "HTTP(s)"<br>
+            5. أضف رابط: <code>https://your-app.onrender.com/cron-post?secret=my_secret_cron_key_123</code><br>
+            6. Interval: 60 minutes<br>
+            7. اضغط "Create Monitor"
+        </p>
+    </div>
+</div>
+    """, unsafe_allow_html=True)
+    
+    # Step 6: Facebook Webhook
+    st.markdown("""
+<div class="setup-step">
+    <div class="step-number">6</div>
+    <div class="step-content">
+        <h4>🔗 ربط Facebook Webhook</h4>
+        <p>
+            1. اذهب إلى <a href="https://developers.facebook.com" target="_blank">Facebook Developers</a><br>
+            2. اختر تطبيقك → Products → Webhooks<br>
+            3. Callback URL: <code>https://your-app.onrender.com/webhook</code><br>
+            4. Verify Token: <code>academy_webhook_2026</code><br>
+            5. اشترك في: feed, messages, comments<br>
+            6. اختبر الاتصال
+        </p>
+    </div>
+</div>
+    """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Quick Links Section
+    st.markdown("### 🔗 روابط سريعة")
+    
+    link_col1, link_col2, link_col3, link_col4 = st.columns(4)
+    
+    with link_col1:
+        st.markdown("""
+<a href="https://console.groq.com" target="_blank" class="link-card">
+    <div class="icon">🤖</div>
+    <h4>Groq Console</h4>
+    <p>مفاتيح API للذكاء الاصطناعي</p>
+</a>
+        """, unsafe_allow_html=True)
+    
+    with link_col2:
+        st.markdown("""
+<a href="https://developers.facebook.com" target="_blank" class="link-card">
+    <div class="icon">📘</div>
+    <h4>Facebook Developers</h4>
+    <p>إعداد التطبيق والـ Token</p>
+</a>
+        """, unsafe_allow_html=True)
+    
+    with link_col3:
+        st.markdown("""
+<a href="https://render.com" target="_blank" class="link-card">
+    <div class="icon">🖥️</div>
+    <h4>Render</h4>
+    <p>نشر الـ Webhook</p>
+</a>
+        """, unsafe_allow_html=True)
+    
+    with link_col4:
+        st.markdown("""
+<a href="https://uptimerobot.com" target="_blank" class="link-card">
+    <div class="icon">⏰</div>
+    <h4>UptimeRobot</h4>
+    <p>جدولة النشر التلقائي</p>
+</a>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Secrets Template
+    st.markdown("### 📝 نموذج Secrets (للنسخ)")
+    
+    secrets_template = """# Streamlit Secrets Template
+# انسخ هذا في Advanced Settings → Secrets
+
+GROQ_API_KEY_4 = "gsk_xxxxxxxxxxxxxxxxx"
+PAGE_ACCESS_TOKEN = "EAAxxxxxxxxxxxxxxx"
+NVIDIA_API_KEY = "nvapi-xxxxxxxxxx"  # اختياري
+IMGBB_API_KEY = "xxxxxxxxxx"  # اختياري
+"""
+    
+    st.code(secrets_template, language="toml")
+    
+    # Environment Variables for Render
+    st.markdown("### 🔐 متغيرات البيئة لـ Render")
+    
+    render_env = """# Environment Variables for Render
+# أضف هذه في Render Dashboard → Environment
+
+GROQ_API_KEY_4=gsk_xxxxxxxxxxxxxxxxx
+PAGE_ACCESS_TOKEN=EAAxxxxxxxxxxxxxxx
+"""
+    
+    st.code(render_env, language="bash")
+    
+    st.markdown("---")
+    
+    # Test Section
+    st.markdown("### 🧪 اختبار الاتصال")
+    
+    webhook_url = st.text_input(
+        "رابط الـ Webhook (Render URL)",
+        placeholder="https://your-app.onrender.com",
+        key="test_webhook_url"
+    )
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if st.button("🔍 فحص حالة السيرفر", use_container_width=True):
+            if webhook_url:
+                try:
+                    url = webhook_url.rstrip('/') + '/status'
+                    response = requests.get(url, timeout=10)
+                    if response.status_code == 200:
+                        data = response.json()
+                        st.success(f"✅ السيرفر يعمل!")
+                        st.json(data)
+                    else:
+                        st.error(f"❌ خطأ: {response.status_code}")
+                except Exception as e:
+                    st.error(f"❌ فشل الاتصال: {e}")
+            else:
+                st.warning("أدخل رابط الـ Webhook أولاً")
+    
+    with col2:
+        if st.button("🧪 اختبار توليد الأكواد", use_container_width=True):
+            if webhook_url:
+                try:
+                    url = webhook_url.rstrip('/') + '/gen-vouchers'
+                    response = requests.post(url, json={
+                        "step1": "بلح",
+                        "step2": "طرح",
+                        "step3": "موز",
+                        "count": 1,
+                        "duration_days": 7
+                    }, timeout=10)
+                    if response.status_code == 200:
+                        st.success("✅ نظام الأكواد يعمل!")
+                        st.json(response.json())
+                    else:
+                        st.error(f"❌ خطأ: {response.json()}")
+                except Exception as e:
+                    st.error(f"❌ فشل الاتصال: {e}")
+            else:
+                st.warning("أدخل رابط الـ Webhook أولاً")
+    
+    st.markdown("---")
+    
+    # FAQ Section
+    st.markdown("### ❓ الأسئلة الشائعة")
+    
+    with st.expander("🤔 كيف أحصل على Page Access Token دائم؟"):
+        st.markdown("""
+        1. أنشئ System User في Business Manager
+        2. اربطه بالصفحة مع صلاحيات كاملة
+        3. ولّد Token من System User
+        4. هذا التوكن لا ينتهي!
+        
+        [📖 دليل Facebook الرسمي](https://developers.facebook.com/docs/pages/access-tokens)
+        """)
+    
+    with st.expander("🔄 السيرفر على Render ينام - ماذا أفعل؟"):
+        st.markdown("""
+        الخطة المجانية على Render تنام بعد 15 دقيقة من عدم النشاط.
+        
+        **الحل:**
+        - استخدم UptimeRobot لإرسال طلب كل 14 دقيقة
+        - أو قم بالترقية لخطة مدفوعة ($7/شهر)
+        """)
+    
+    with st.expander("💡 كيف أغير كود المدير الثلاثي؟"):
+        st.markdown("""
+        الكود الافتراضي: `بلح` → `طرح` → `موز`
+        
+        لتغييره، عدل في ملف `webhook.py`:
+        ```python
+        if step1 != "بلح" or step2 != "طرح" or step3 != "موز":
+        ```
+        
+        غير الكلمات للي تحبها وارفع التحديث.
+        """)
+    
+    with st.expander("📱 التطبيق لا يظهر بشكل صحيح على الموبايل؟"):
+        st.markdown("""
+        - تأكد من استخدام أحدث نسخة من الكود
+        - جرب مسح cache المتصفح
+        - استخدم Chrome أو Safari للحصول على أفضل تجربة
+        """)
+
 # --- Footer ---
 st.markdown("---")
 footer_data = load_academy_data()
 st.markdown(
     f"""
-<div style="text-align: center; color: #888; padding: 1rem;">
-    🥋 <strong>{footer_data.get('academy_name', 'الأكاديمية')}</strong> - v4.0 Multi-Tenant Ready<br>
-    <small>Powered by Groq + Facebook API 🚀</small>
+<div class="premium-footer">
+    <p>🥋 <strong>{footer_data.get('academy_name', 'الأكاديمية')}</strong> - v4.1 Premium</p>
+    <p style="font-size: 0.85rem; margin-top: 0.5rem;">Powered by Groq AI + Facebook API 🚀</p>
 </div>
 """,
     unsafe_allow_html=True,

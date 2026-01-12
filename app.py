@@ -433,17 +433,11 @@ def upload_to_imgbb(image_base64, api_key):
 
 # --- Page Configuration ---
 st.set_page_config(
-    page_title="أكاديمية أبطال أكتوبر v3.1",
+    page_title="أكاديمية أبطال أكتوبر v4.1",
     page_icon="🥋",
     layout="wide",
     initial_sidebar_state="expanded",
 )
-    st.markdown("### 🔗 روابط")
-    if data.get("facebook"):
-        st.markdown(f"[📘 فيسبوك]({data.get('facebook')})")
-    if data.get("map_link"):
-        st.markdown(f"[📍 الخريطة]({data.get('map_link')})")
-    st.markdown(f"📞 **{data.get('phone', '')}**")
 
 # --- Main Header ---
 data = load_academy_data()

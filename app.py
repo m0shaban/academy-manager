@@ -62,6 +62,9 @@ except FileNotFoundError:
 # Back-compat alias used across the app
 groq_key = GROQ_API_KEY
 
+# Back-compat alias used across the app
+fb_token = PAGE_ACCESS_TOKEN
+
 
 def post_to_facebook_page(message, access_token, image_url=None):
     """Post content to Facebook Page Feed (Robust Mode)."""
@@ -322,7 +325,7 @@ def fetch_rss_images(sport, data):
                 # Try to find images in entry
                 if hasattr(entry, "media_content"):
                     for media in entry.media_content:
-                        if "image" in media.get("type", ""):
+                        if "image" in str(media.get("type") or ""):
                             images.append(
                                 {
                                     "url": media.get("url"),
@@ -333,7 +336,7 @@ def fetch_rss_images(sport, data):
                 # Check for enclosures (common in RSS)
                 if hasattr(entry, "enclosures"):
                     for enc in entry.enclosures:
-                        if "image" in enc.get("type", ""):
+                        if "image" in str(enc.get("type") or ""):
                             images.append(
                                 {
                                     "url": enc.get("href"),
@@ -344,11 +347,15 @@ def fetch_rss_images(sport, data):
                 # Check for images in content
                 if hasattr(entry, "content"):
                     for content in entry.content:
-                        if "<img" in content.get("value", ""):
+                        value = content.get("value") if hasattr(content, "get") else ""
+                        if not isinstance(value, str):
+                            value = str(value or "")
+
+                        if "<img" in value:
                             import re
 
                             img_urls = re.findall(
-                                r'src="([^"]+)"', content.get("value", "")
+                                r'src="([^"]+)"', value
                             )
                             for img_url in img_urls:
                                 if img_url.startswith("http"):

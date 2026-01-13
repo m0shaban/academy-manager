@@ -59,6 +59,9 @@ except FileNotFoundError:
     IMGBB_API_KEY = ""
     PAGE_ACCESS_TOKEN = ""
 
+# Back-compat alias used across the app
+groq_key = GROQ_API_KEY
+
 
 def post_to_facebook_page(message, access_token, image_url=None):
     """Post content to Facebook Page Feed (Robust Mode)."""

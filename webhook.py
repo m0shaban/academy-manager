@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 import os
 import sqlite3
 import random
@@ -22,6 +22,112 @@ ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")  # حماية احترافية لت�
 # بسيط ومفيد ضد التخمين (in-memory). مناسب لـ Render single instance.
 _GEN_FAILS = {}
 _GEN_BLOCKED_UNTIL = {}
+
+
+def _landing_html(dashboard_url: str) -> str:
+        return f"""<!doctype html>
+<html lang=\"ar\" dir=\"rtl\">
+<head>
+    <meta charset=\"utf-8\" />
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+    <title>بوت الأكاديمية • لوحة التعريف</title>
+    <style>
+        :root {{
+            --bg: #0b1220;
+            --card: rgba(255,255,255,0.06);
+            --card2: rgba(255,255,255,0.10);
+            --text: #e6edf6;
+            --muted: rgba(230,237,246,0.75);
+            --accent: #7c3aed;
+            --accent2: #22c55e;
+            --border: rgba(255,255,255,0.10);
+        }}
+        * {{ box-sizing: border-box; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; }}
+        body {{ margin: 0; background: radial-gradient(1200px 600px at 20% 10%, rgba(124,58,237,0.25), transparent 50%),
+                                         radial-gradient(900px 500px at 80% 0%, rgba(34,197,94,0.20), transparent 55%),
+                                         var(--bg);
+                     color: var(--text); }}
+        .wrap {{ max-width: 1100px; margin: 0 auto; padding: 42px 18px 60px; }}
+        .nav {{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom: 28px; }}
+        .brand {{ display:flex; align-items:center; gap:12px; }}
+        .logo {{ width: 44px; height: 44px; border-radius: 14px;
+                         background: linear-gradient(135deg, rgba(124,58,237,1), rgba(217,70,239,1));
+                         display:flex; align-items:center; justify-content:center; font-weight:900; }}
+        .pill {{ padding: 8px 12px; border-radius: 999px; border:1px solid var(--border); background: rgba(255,255,255,0.04); color: var(--muted); font-size: 13px; }}
+        .hero {{ display:grid; grid-template-columns: 1.3fr 1fr; gap: 18px; align-items: stretch; }}
+        @media (max-width: 900px) {{ .hero {{ grid-template-columns: 1fr; }} }}
+        .card {{ border:1px solid var(--border); background: var(--card); border-radius: 22px; padding: 22px; }}
+        h1 {{ margin: 0 0 10px 0; font-size: clamp(24px, 4vw, 40px); line-height: 1.25; }}
+        p {{ margin: 0 0 14px 0; color: var(--muted); line-height: 1.8; }}
+        .cta {{ display:flex; flex-wrap:wrap; gap: 10px; margin-top: 12px; }}
+        a.btn {{ text-decoration:none; padding: 12px 16px; border-radius: 14px; font-weight: 700; display:inline-flex; align-items:center; gap:10px; }}
+        .primary {{ background: linear-gradient(135deg, rgba(124,58,237,1), rgba(217,70,239,1)); color: #fff; }}
+        .secondary {{ background: rgba(255,255,255,0.06); border:1px solid var(--border); color: var(--text); }}
+        .grid {{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }}
+        @media (max-width: 900px) {{ .grid {{ grid-template-columns: 1fr; }} }}
+        .feat {{ padding: 14px; border-radius: 16px; border:1px solid var(--border); background: rgba(255,255,255,0.04); }}
+        .feat b {{ display:block; margin-bottom: 6px; }}
+        .small {{ font-size: 13px; color: var(--muted); }}
+        .footer {{ margin-top: 18px; display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; }}
+        code {{ direction:ltr; unicode-bidi: plaintext; background: rgba(0,0,0,0.25); padding: 2px 6px; border-radius: 8px; border:1px solid rgba(255,255,255,0.08); }}
+    </style>
+</head>
+<body>
+    <div class=\"wrap\">
+        <div class=\"nav\">
+            <div class=\"brand\">
+                <div class=\"logo\">AI</div>
+                <div>
+                    <div style=\"font-weight:900; font-size:16px;\">بوت الأكاديمية</div>
+                    <div class=\"small\">Business + Technology Landing</div>
+                </div>
+            </div>
+            <div class=\"pill\">Render Webhook Service • Online</div>
+        </div>
+
+        <div class=\"hero\">
+            <div class=\"card\">
+                <h1>خلي البوت يشتغل… وإنت تدير كل حاجة من لوحة التحكم.</h1>
+                <p>ده سيرفر الـ <b>Webhook</b> المسؤول عن استقبال الرسائل والأحداث وتشغيل الأتمتة. لو هدفك الإدارة والتعديل والتوليد، افتح لوحة التحكم.</p>
+                <div class=\"cta\">
+                    <a class=\"btn primary\" href=\"{dashboard_url}\">🚀 دخول لوحة التحكم</a>
+                    <a class=\"btn secondary\" href=\"/health\">🟢 فحص الحالة</a>
+                </div>
+                <div class=\"grid\">
+                    <div class=\"feat\"><b>ردود ذكية</b><div class=\"small\">سيناريوهات جاهزة + أسلوب كابتن</div></div>
+                    <div class=\"feat\"><b>أتمتة نشر</b><div class=\"small\">تشغيل مهام مجدولة بشكل آمن</div></div>
+                    <div class=\"feat\"><b>إدارة من Streamlit</b><div class=\"small\">واجهة عربية، سريعة، وقابلة للتخصيص</div></div>
+                </div>
+            </div>
+
+            <div class=\"card\" style=\"background: var(--card2);\">
+                <h2 style=\"margin:0 0 10px 0;\">للمطور / الأدمن</h2>
+                <p class=\"small\">نصائح سريعة:</p>
+                <ul class=\"small\" style=\"margin:0; padding-right: 18px; line-height: 1.9;\">
+                    <li>لو بتستخدم حماية توليد الأكواد: عرّف <code>ADMIN_TOKEN</code> على Render وStreamlit بنفس القيمة.</li>
+                    <li>لو بتراقب الخدمة: استخدم <code>/health</code> بدل ما تستدعي endpoints حساسة.</li>
+                    <li>ده مجرد Landing Page — البوت نفسه شغال على endpoints الخلفية.</li>
+                </ul>
+                <div class=\"footer\">
+                    <div class=\"small\">© {datetime.utcnow().year} • Academy Manager</div>
+                    <div class=\"small\">Build: Flask + Render</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>"""
+
+
+@app.route("/", methods=["GET"])
+def landing_page():
+        dashboard_url = os.environ.get("DASHBOARD_URL") or "https://october.streamlit.app/"
+        return Response(_landing_html(dashboard_url), mimetype="text/html")
+
+
+@app.route("/health", methods=["GET"])
+def health():
+        return jsonify({"status": "ok", "service": "academy-webhook"})
 
 # Initialize Groq
 client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None

@@ -63,19 +63,57 @@ except ImportError:
 DATA_FILE = Path(__file__).parent / "academy_data.json"
 # ENV_FILE = Path(__file__).parent / ".env" # No longer needed with Streamlit Secrets
 
-# API Keys from Streamlit Secrets
-# Ensure you have a .streamlit/secrets.toml file locally or secrets set up in Streamlit Cloud
-try:
-    GROQ_API_KEY = st.secrets.get("GROQ_API_KEY_4", "")
-    NVIDIA_API_KEY = st.secrets.get("NVIDIA_API_KEY", "")
-    IMGBB_API_KEY = st.secrets.get("IMGBB_API_KEY", "")
-    PAGE_ACCESS_TOKEN = st.secrets.get("PAGE_ACCESS_TOKEN", "")
-except FileNotFoundError:
-    st.error("ملف secrets.toml غير موجود. يرجى إعداد أسرار Streamlit.")
-    GROQ_API_KEY = ""
-    NVIDIA_API_KEY = ""
-    IMGBB_API_KEY = ""
-    PAGE_ACCESS_TOKEN = ""
+
+def _get_setting(key: str, default: str = "") -> str:
+    """Read config from Streamlit Secrets first, then environment variables.
+
+    This enables running the dashboard on Render (env vars) or Streamlit Cloud (secrets).
+    """
+
+    value = None
+    try:
+        value = st.secrets.get(key, None)
+    except FileNotFoundError:
+        value = None
+    except Exception:
+        value = None
+
+    if value is None or value == "":
+        value = os.environ.get(key, default)
+
+    return str(value) if value is not None else str(default)
+
+
+def _get_gcp_service_account_info():
+    """Return service account dict from secrets or GOOGLE_SERVICE_ACCOUNT_JSON env var."""
+
+    try:
+        svc = st.secrets.get("gcp_service_account", None)
+    except FileNotFoundError:
+        svc = None
+    except Exception:
+        svc = None
+
+    if svc:
+        try:
+            return dict(svc)
+        except Exception:
+            return None
+
+    raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
+    if raw:
+        try:
+            return json.loads(raw)
+        except Exception:
+            return None
+
+    return None
+
+# API keys: Streamlit Secrets OR environment variables (Render)
+GROQ_API_KEY = _get_setting("GROQ_API_KEY_4", "")
+NVIDIA_API_KEY = _get_setting("NVIDIA_API_KEY", "")
+IMGBB_API_KEY = _get_setting("IMGBB_API_KEY", "")
+PAGE_ACCESS_TOKEN = _get_setting("PAGE_ACCESS_TOKEN", "")
 
 # Back-compat alias used across the app
 groq_key = GROQ_API_KEY
@@ -510,7 +548,7 @@ def _get_query_param(name: str):
 if _get_query_param("sg") == "1":
     from secret_gate_ui import render_secret_gate
 
-    BACKEND_URL = st.secrets.get("BACKEND_URL", "https://your-render-app.onrender.com")
+    BACKEND_URL = _get_setting("BACKEND_URL", "https://your-render-app.onrender.com")
     render_secret_gate(BACKEND_URL, standalone=False)
     st.stop()
 
@@ -1453,9 +1491,9 @@ with tab2:
             "Google Sheets integration غير متاحة: ثبّت gspread في requirements.txt"
         )
     else:
-        sheet_id = st.secrets.get("GOOGLE_SHEET_ID", "")
-        worksheet_name = st.secrets.get("GOOGLE_SHEET_WORKSHEET", "Buffer") or "Buffer"
-        svc = st.secrets.get("gcp_service_account", None)
+        sheet_id = _get_setting("GOOGLE_SHEET_ID", "")
+        worksheet_name = _get_setting("GOOGLE_SHEET_WORKSHEET", "Buffer") or "Buffer"
+        svc = _get_gcp_service_account_info()
 
         col_cfg1, col_cfg2 = st.columns([2, 1])
         with col_cfg1:
@@ -2686,8 +2724,8 @@ with tab7:
         "استقبل ورد على رسائل العملاء من WhatsApp والتعليقات على Facebook من مكان واحد"
     )
 
-    BACKEND_URL = st.secrets.get("BACKEND_URL", "https://your-render-app.onrender.com")
-    ADMIN_TOKEN = st.secrets.get("ADMIN_TOKEN", "")
+    BACKEND_URL = _get_setting("BACKEND_URL", "https://your-render-app.onrender.com")
+    ADMIN_TOKEN = _get_setting("ADMIN_TOKEN", "")
 
     col_tab, col_refresh = st.columns([3, 1])
     with col_refresh:
@@ -2855,9 +2893,7 @@ with tab7:
     st.markdown("### ⚙️ إعدادات Webhooks")
 
     with st.expander("🔗 روابط Webhooks للنسخ (Meta App)"):
-        backend_url = st.secrets.get(
-            "BACKEND_URL", "https://your-render-app.onrender.com"
-        )
+        backend_url = _get_setting("BACKEND_URL", "https://your-render-app.onrender.com")
 
         st.markdown("#### Facebook (Messenger + Comments) Webhook URL")
         st.code(f"{backend_url}/webhook")

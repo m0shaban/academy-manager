@@ -83,6 +83,19 @@ streamlit run app.py
 # 3. أضف الsecrets في إعدادات النشر
 ```
 
+### 🌍 نشر الداشبورد على Render (بدل Streamlit Cloud)
+
+لو عايز **كل السيستم على Render**:
+
+- استخدم نفس الريبو، وأنشئ **Web Service** لتشغيل Streamlit
+- الأمر (Start Command):
+   - `streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true`
+- المتطلبات: `requirements.txt`
+- الإعدادات تكون عبر **Environment Variables** (Render) مثل:
+   - `BACKEND_URL`, `ADMIN_TOKEN`, `GROQ_API_KEY_4`, `PAGE_ACCESS_TOKEN`, `GOOGLE_SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON`
+
+ملاحظة: الداشبورد والـ webhook سيكون لهم **رابطين مختلفين** على Render (كل خدمة لها URL).
+
 ### 🤖 نشر الwebhook (Flask)
 
 ```bash

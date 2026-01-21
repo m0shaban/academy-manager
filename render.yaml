@@ -23,3 +23,13 @@ services:
         sync: false
       - key: DASHBOARD_URL
         sync: false
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_ADMIN_ID
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false
+      - key: IMGBB_API_KEY
+        sync: false
+      - key: BUFFER_MINUTES
+        sync: false

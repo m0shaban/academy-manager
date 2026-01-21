@@ -4,6 +4,7 @@ import sqlite3
 import random
 from datetime import datetime, timedelta
 from datetime import timezone
+import base64
 
 from groq import Groq
 import requests
@@ -13,6 +14,7 @@ import pytz
 
 from gsheets_cms import (
     SheetConfig,
+    append_scheduled_post,
     ensure_headers,
     find_due_scheduled,
     list_rows,
@@ -41,6 +43,13 @@ WHATSAPP_VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "academy_whatsap
 # Google Sheets CMS
 GOOGLE_SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "")
 GOOGLE_SHEET_WORKSHEET = os.environ.get("GOOGLE_SHEET_WORKSHEET", "Buffer")
+
+# Telegram Webhook Uploader (single web server option)
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_ADMIN_ID = os.environ.get("TELEGRAM_ADMIN_ID", "")
+TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
+IMGBB_API_KEY = os.environ.get("IMGBB_API_KEY", "")
+BUFFER_MINUTES = int(os.environ.get("BUFFER_MINUTES", "30") or "30")
 
 _GS_CLIENT = None
 _GS_WS = None
@@ -73,6 +82,153 @@ def _get_sheet():
 def _is_publish_success(result: str) -> bool:
     s = str(result or "")
     return "Published Successfully" in s or s.strip().startswith("{") or "id" in s
+
+
+def _telegram_api_url(method: str) -> str:
+    return f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/{method}"
+
+
+def _telegram_send_message(chat_id: int, text: str) -> None:
+    if not TELEGRAM_BOT_TOKEN:
+        return
+    try:
+        requests.post(
+            _telegram_api_url("sendMessage"),
+            json={"chat_id": chat_id, "text": text},
+            timeout=15,
+        )
+    except Exception:
+        pass
+
+
+def _imgbb_upload(image_bytes: bytes) -> str:
+    if not IMGBB_API_KEY:
+        return ""
+
+    b64 = base64.b64encode(image_bytes).decode("utf-8")
+    try:
+        resp = requests.post(
+            "https://api.imgbb.com/1/upload",
+            data={"key": IMGBB_API_KEY, "image": b64},
+            timeout=60,
+        )
+        payload = resp.json() if resp.content else {}
+        if resp.status_code != 200:
+            return ""
+        data = payload.get("data") or {}
+        return str(data.get("url") or data.get("display_url") or "").strip()
+    except Exception:
+        return ""
+
+
+def _generate_telegram_caption(user_caption: str) -> str:
+    user_caption = str(user_caption or "").strip()
+    if user_caption:
+        return user_caption
+
+    # fallback: use existing post generator style
+    try:
+        idea = {
+            "type": "original",
+            "category": "training_drill",
+            "image_url": "",
+        }
+        text = generate_social_post(idea)
+        return str(text or "").strip() or "بوست جديد من الأكاديمية 💪"
+    except Exception:
+        return "بوست جديد من الأكاديمية 💪"
+
+
+@app.route("/telegram/webhook", methods=["POST"])
+def telegram_webhook():
+    # Security: validate Telegram secret header
+    secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+    if not TELEGRAM_WEBHOOK_SECRET or secret != TELEGRAM_WEBHOOK_SECRET:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+
+    if not TELEGRAM_BOT_TOKEN:
+        return jsonify({"ok": False, "error": "TELEGRAM_BOT_TOKEN not configured"}), 500
+
+    ws, header = _get_sheet()
+    if not ws or not header:
+        return jsonify({"ok": False, "error": "Google Sheets not configured"}), 500
+
+    update = request.get_json(silent=True) or {}
+    message = update.get("message") or update.get("edited_message") or {}
+
+    chat = message.get("chat") or {}
+    chat_id = chat.get("id")
+    from_user = message.get("from") or {}
+    from_id = from_user.get("id")
+
+    # Admin-only
+    try:
+        admin_id = int(str(TELEGRAM_ADMIN_ID).strip()) if TELEGRAM_ADMIN_ID else None
+    except Exception:
+        admin_id = None
+
+    if admin_id and from_id != admin_id:
+        if chat_id:
+            _telegram_send_message(chat_id, "غير مسموح. هذا البوت للأدمن فقط.")
+        return jsonify({"ok": True})
+
+    photos = message.get("photo") or []
+    if not photos:
+        if chat_id:
+            _telegram_send_message(chat_id, "ابعت صورة فقط.")
+        return jsonify({"ok": True})
+
+    # pick largest photo
+    best = photos[-1]
+    file_id = best.get("file_id")
+    if not file_id:
+        return jsonify({"ok": True})
+
+    # Download file bytes from Telegram
+    try:
+        r = requests.get(_telegram_api_url("getFile"), params={"file_id": file_id}, timeout=20)
+        payload = r.json() if r.content else {}
+        if not payload.get("ok"):
+            raise RuntimeError("getFile failed")
+        file_path = (payload.get("result") or {}).get("file_path")
+        if not file_path:
+            raise RuntimeError("no file_path")
+
+        file_url = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{file_path}"
+        img_resp = requests.get(file_url, timeout=60)
+        img_resp.raise_for_status()
+        image_bytes = img_resp.content
+    except Exception:
+        if chat_id:
+            _telegram_send_message(chat_id, "حصل خطأ في تحميل الصورة من Telegram.")
+        return jsonify({"ok": True})
+
+    image_url = _imgbb_upload(image_bytes)
+    if not image_url:
+        if chat_id:
+            _telegram_send_message(chat_id, "حصل خطأ في رفع الصورة (IMGBB).")
+        return jsonify({"ok": True})
+
+    caption_text = _generate_telegram_caption(message.get("caption"))
+    scheduled_time = (
+        datetime.now(timezone.utc) + timedelta(minutes=max(BUFFER_MINUTES, 0))
+    ).replace(microsecond=0)
+    scheduled_iso = scheduled_time.isoformat()
+
+    try:
+        append_scheduled_post(ws, image_url, caption_text, scheduled_iso)
+    except Exception:
+        if chat_id:
+            _telegram_send_message(chat_id, "حصل خطأ في حفظ البيانات داخل Google Sheet.")
+        return jsonify({"ok": True})
+
+    if chat_id:
+        _telegram_send_message(
+            chat_id,
+            f"✅ اتسجلت في الشيت\n⏳ موعد النشر: {scheduled_iso}\n🔗 {image_url}",
+        )
+
+    return jsonify({"ok": True, "image_url": image_url, "scheduled_time": scheduled_iso})
 
 
 def process_due_sheet_posts(max_posts: int = 1) -> dict:

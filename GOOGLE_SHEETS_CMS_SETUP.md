@@ -16,7 +16,7 @@
 
 - `webhook.py`: سيرفر Render (Facebook posting + Publisher tick + APIs)
 - `app.py`: Streamlit Dashboard (إدارة المحتوى + Pending Posts من الشيت)
-- `telegram_bot.py`: Telegram Uploader (يستقبل الصور ويضيفها للشيت)
+- `telegram_bot.py`: Telegram Uploader (Polling) — اختياري لو هتشغل Worker منفصل
 - `gsheets_cms.py`: طبقة التعامل مع Google Sheets (قراءة/كتابة/Backoff)
 - `main.py`: سكربت اختياري لتشغيل Publisher tick كل دقيقة (بديل للكرون)
 
@@ -142,7 +142,42 @@ GOOGLE_SHEET_WORKSHEET = "Buffer"
 
 ---
 
-## 6) إعداد Telegram Bot (Uploader)
+## 6) إعداد Telegram Uploader (اختار طريقة واحدة)
+
+### الطريقة A (مفضلة لو عايز Web Server واحد): Telegram Webhook داخل Render
+
+في هذه الطريقة، **لا تحتاج Worker للبوت**. Telegram سيرسل Updates مباشرة على endpoint داخل نفس `webhook.py`.
+
+#### 6.A.1 متغيرات البيئة على Render
+
+أضف في Render (نفس خدمة `academy-webhook`):
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_ADMIN_ID`
+- `TELEGRAM_WEBHOOK_SECRET` (سر قوي)
+- `IMGBB_API_KEY`
+- `BUFFER_MINUTES` (افتراضي 30)
+
+> ملاحظة: لازال تحتاج متغيرات Google Sheets و Groq الموجودة في القسم 4.
+
+#### 6.A.2 ضبط Webhook على Telegram
+
+بعد نشر Render، نفّذ (مرة واحدة) من أي مكان:
+
+```bash
+curl -X POST "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
+  -d "url=https://<your-render-app>.onrender.com/telegram/webhook" \
+  -d "secret_token=<TELEGRAM_WEBHOOK_SECRET>"
+```
+
+#### 6.A.3 الاستخدام
+
+- ابعت صورة للبوت من حساب الأدمن
+- النظام: يحمل الصورة من Telegram → يرفعها على ImgBB → يحط صف في الشيت (Scheduled بعد 30 دقيقة)
+
+---
+
+### الطريقة B (بديل): تشغيل `telegram_bot.py` كـ Polling Worker
 
 ### 6.1 المتطلبات
 

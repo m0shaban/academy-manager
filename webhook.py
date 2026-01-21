@@ -3,8 +3,6 @@ import os
 import sqlite3
 import random
 from datetime import datetime, timedelta
-from datetime import timezone
-import base64
 
 from groq import Groq
 import requests
@@ -12,270 +10,15 @@ import feedparser
 from bs4 import BeautifulSoup
 import pytz
 
-from gsheets_cms import (
-    SheetConfig,
-    append_scheduled_post,
-    ensure_headers,
-    find_due_scheduled,
-    list_rows,
-    load_service_account_info_from_env,
-    make_gspread_client,
-    open_worksheet,
-    update_status,
-)
-
 app = Flask(__name__)
 
 # API Keys from environment
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY_4")
 PAGE_ACCESS_TOKEN = os.environ.get("PAGE_ACCESS_TOKEN")
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "academy_webhook_2026")
-CRON_SECRET = os.environ.get(
-    "CRON_SECRET", "my_secret_cron_key_123"
-)  # حماية للرابط عشان محدش غيرك يشغله
+# IMPORTANT: set CRON_SECRET in your hosting provider (Render env var). No insecure default.
+CRON_SECRET = os.environ.get("CRON_SECRET", "").strip()
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")  # حماية احترافية لتوليد الأكواد (Header)
-
-# WhatsApp API
-WHATSAPP_API_TOKEN = os.environ.get("WHATSAPP_API_TOKEN", "")
-WHATSAPP_PHONE_ID = os.environ.get("WHATSAPP_PHONE_ID", "")
-WHATSAPP_VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "academy_whatsapp_2026")
-
-# Google Sheets CMS
-GOOGLE_SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "")
-GOOGLE_SHEET_WORKSHEET = os.environ.get("GOOGLE_SHEET_WORKSHEET", "Buffer")
-
-# Telegram Webhook Uploader (single web server option)
-TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_ADMIN_ID = os.environ.get("TELEGRAM_ADMIN_ID", "")
-TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
-IMGBB_API_KEY = os.environ.get("IMGBB_API_KEY", "")
-BUFFER_MINUTES = int(os.environ.get("BUFFER_MINUTES", "30") or "30")
-
-_GS_CLIENT = None
-_GS_WS = None
-_GS_HEADER = None
-
-
-def _get_sheet():
-    global _GS_CLIENT, _GS_WS, _GS_HEADER
-
-    if not GOOGLE_SHEET_ID:
-        return None, None
-
-    if _GS_WS is not None and _GS_HEADER is not None:
-        return _GS_WS, _GS_HEADER
-
-    svc = load_service_account_info_from_env()
-    if not svc:
-        return None, None
-
-    if _GS_CLIENT is None:
-        _GS_CLIENT = make_gspread_client(svc)
-
-    cfg = SheetConfig(sheet_id=GOOGLE_SHEET_ID, worksheet=GOOGLE_SHEET_WORKSHEET)
-    ws = open_worksheet(_GS_CLIENT, cfg)
-    header = ensure_headers(ws)
-    _GS_WS, _GS_HEADER = ws, header
-    return ws, header
-
-
-def _is_publish_success(result: str) -> bool:
-    s = str(result or "")
-    return "Published Successfully" in s or s.strip().startswith("{") or "id" in s
-
-
-def _telegram_api_url(method: str) -> str:
-    return f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/{method}"
-
-
-def _telegram_send_message(chat_id: int, text: str) -> None:
-    if not TELEGRAM_BOT_TOKEN:
-        return
-    try:
-        requests.post(
-            _telegram_api_url("sendMessage"),
-            json={"chat_id": chat_id, "text": text},
-            timeout=15,
-        )
-    except Exception:
-        pass
-
-
-def _imgbb_upload(image_bytes: bytes) -> str:
-    if not IMGBB_API_KEY:
-        return ""
-
-    b64 = base64.b64encode(image_bytes).decode("utf-8")
-    try:
-        resp = requests.post(
-            "https://api.imgbb.com/1/upload",
-            data={"key": IMGBB_API_KEY, "image": b64},
-            timeout=60,
-        )
-        payload = resp.json() if resp.content else {}
-        if resp.status_code != 200:
-            return ""
-        data = payload.get("data") or {}
-        return str(data.get("url") or data.get("display_url") or "").strip()
-    except Exception:
-        return ""
-
-
-def _generate_telegram_caption(user_caption: str) -> str:
-    user_caption = str(user_caption or "").strip()
-    if user_caption:
-        return user_caption
-
-    # fallback: use existing post generator style
-    try:
-        idea = {
-            "type": "original",
-            "category": "training_drill",
-            "image_url": "",
-        }
-        text = generate_social_post(idea)
-        return str(text or "").strip() or "بوست جديد من الأكاديمية 💪"
-    except Exception:
-        return "بوست جديد من الأكاديمية 💪"
-
-
-@app.route("/telegram/webhook", methods=["POST"])
-def telegram_webhook():
-    # Security: validate Telegram secret header
-    secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
-    if not TELEGRAM_WEBHOOK_SECRET or secret != TELEGRAM_WEBHOOK_SECRET:
-        return jsonify({"ok": False, "error": "unauthorized"}), 403
-
-    if not TELEGRAM_BOT_TOKEN:
-        return jsonify({"ok": False, "error": "TELEGRAM_BOT_TOKEN not configured"}), 500
-
-    ws, header = _get_sheet()
-    if not ws or not header:
-        return jsonify({"ok": False, "error": "Google Sheets not configured"}), 500
-
-    update = request.get_json(silent=True) or {}
-    message = update.get("message") or update.get("edited_message") or {}
-
-    chat = message.get("chat") or {}
-    chat_id = chat.get("id")
-    from_user = message.get("from") or {}
-    from_id = from_user.get("id")
-
-    # Admin-only
-    try:
-        admin_id = int(str(TELEGRAM_ADMIN_ID).strip()) if TELEGRAM_ADMIN_ID else None
-    except Exception:
-        admin_id = None
-
-    if admin_id and from_id != admin_id:
-        if chat_id:
-            _telegram_send_message(chat_id, "غير مسموح. هذا البوت للأدمن فقط.")
-        return jsonify({"ok": True})
-
-    photos = message.get("photo") or []
-    if not photos:
-        if chat_id:
-            _telegram_send_message(chat_id, "ابعت صورة فقط.")
-        return jsonify({"ok": True})
-
-    # pick largest photo
-    best = photos[-1]
-    file_id = best.get("file_id")
-    if not file_id:
-        return jsonify({"ok": True})
-
-    # Download file bytes from Telegram
-    try:
-        r = requests.get(_telegram_api_url("getFile"), params={"file_id": file_id}, timeout=20)
-        payload = r.json() if r.content else {}
-        if not payload.get("ok"):
-            raise RuntimeError("getFile failed")
-        file_path = (payload.get("result") or {}).get("file_path")
-        if not file_path:
-            raise RuntimeError("no file_path")
-
-        file_url = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{file_path}"
-        img_resp = requests.get(file_url, timeout=60)
-        img_resp.raise_for_status()
-        image_bytes = img_resp.content
-    except Exception:
-        if chat_id:
-            _telegram_send_message(chat_id, "حصل خطأ في تحميل الصورة من Telegram.")
-        return jsonify({"ok": True})
-
-    image_url = _imgbb_upload(image_bytes)
-    if not image_url:
-        if chat_id:
-            _telegram_send_message(chat_id, "حصل خطأ في رفع الصورة (IMGBB).")
-        return jsonify({"ok": True})
-
-    caption_text = _generate_telegram_caption(message.get("caption"))
-    scheduled_time = (
-        datetime.now(timezone.utc) + timedelta(minutes=max(BUFFER_MINUTES, 0))
-    ).replace(microsecond=0)
-    scheduled_iso = scheduled_time.isoformat()
-
-    try:
-        append_scheduled_post(ws, image_url, caption_text, scheduled_iso)
-    except Exception:
-        if chat_id:
-            _telegram_send_message(chat_id, "حصل خطأ في حفظ البيانات داخل Google Sheet.")
-        return jsonify({"ok": True})
-
-    if chat_id:
-        _telegram_send_message(
-            chat_id,
-            f"✅ اتسجلت في الشيت\n⏳ موعد النشر: {scheduled_iso}\n🔗 {image_url}",
-        )
-
-    return jsonify({"ok": True, "image_url": image_url, "scheduled_time": scheduled_iso})
-
-
-def process_due_sheet_posts(max_posts: int = 1) -> dict:
-    """Publish due Scheduled posts from Google Sheet.
-
-    Returns summary dict; safe no-op if sheet not configured.
-    """
-    ws, header = _get_sheet()
-    if not ws or not header:
-        return {"enabled": False, "posted": 0, "items": []}
-
-    rows = list_rows(ws)
-    due = find_due_scheduled(rows, now_utc=datetime.now(timezone.utc))
-
-    posted_items = []
-    for item in due[: max_posts or 1]:
-        row_number = int(item.get("_row_number"))
-        caption = str(item.get("AI_Caption") or "").strip()
-        image_url = str(item.get("Image_URL") or "").strip()
-
-        if not caption and not image_url:
-            # mark as failed to avoid endless retries
-            update_status(ws, row_number, "Failed", header)
-            continue
-
-        result = publish_to_facebook(caption, image_url or None)
-        if _is_publish_success(result):
-            update_status(ws, row_number, "Posted", header)
-            posted_items.append(
-                {
-                    "row": row_number,
-                    "status": "Posted",
-                    "result": str(result),
-                }
-            )
-        else:
-            update_status(ws, row_number, "Failed", header)
-            posted_items.append(
-                {
-                    "row": row_number,
-                    "status": "Failed",
-                    "result": str(result),
-                }
-            )
-
-    return {"enabled": True, "posted": len(posted_items), "items": posted_items}
-
 
 # بسيط ومفيد ضد التخمين (in-memory). مناسب لـ Render single instance.
 _GEN_FAILS = {}
@@ -421,48 +164,6 @@ def init_db():
             used_by TEXT,
             used_at TEXT,
             created_at TEXT
-        )
-        """
-    )
-    # جداول جديدة للرسائل والتعليقات
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            platform TEXT,  -- 'whatsapp' or 'messenger'
-            sender_id TEXT,
-            sender_name TEXT,
-            message_text TEXT,
-            received_at TIMESTAMP,
-            reply_text TEXT,
-            replied_at TIMESTAMP,
-            status TEXT  -- 'pending', 'replied'
-        )
-        """
-    )
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS comments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            comment_id TEXT,
-            post_id TEXT,
-            sender_id TEXT,
-            sender_name TEXT,
-            comment_text TEXT,
-            received_at TIMESTAMP,
-            reply_text TEXT,
-            replied_at TIMESTAMP,
-            status TEXT  -- 'pending', 'replied'
-        )
-        """
-    )
-
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS events (
-            key TEXT PRIMARY KEY,
-            value TEXT,
-            updated_at TIMESTAMP
         )
         """
     )
@@ -685,7 +386,7 @@ def extract_image_from_url(url):
             return og_image["content"]
 
         # Try twitter:image
-        twitter_image = soup.find("meta", name="twitter:image")
+        twitter_image = soup.find("meta", attrs={"name": "twitter:image"})
         if twitter_image and twitter_image.get("content"):
             return twitter_image["content"]
 
@@ -741,6 +442,8 @@ def fetch_content_idea():
 
 def generate_social_post(idea):
     """Generate the post text using Groq"""
+    if not client:
+        return None
 
     if idea["type"] == "curated":
         prompt = f"""
@@ -813,34 +516,7 @@ def publish_to_facebook(message, image_url=None):
         data["link"] = image_url
 
     try:
-        resp = requests.post(url, params=params, json=data, timeout=30)
-        try:
-            payload = resp.json()
-        except Exception:
-            payload = {}
-
-        if resp.status_code != 200:
-            return f"Error publishing: {resp.status_code} {payload or resp.text}"
-
-        post_id = payload.get("id")
-        if post_id:
-            try:
-                conn = get_db()
-                cur = conn.cursor()
-                now = datetime.utcnow().isoformat()
-                cur.execute(
-                    "INSERT OR REPLACE INTO events (key, value, updated_at) VALUES (?, ?, ?)",
-                    ("last_facebook_post_id", str(post_id), now),
-                )
-                cur.execute(
-                    "INSERT OR REPLACE INTO events (key, value, updated_at) VALUES (?, ?, ?)",
-                    ("last_facebook_post_at", now, now),
-                )
-                conn.commit()
-                conn.close()
-            except Exception:
-                pass
-
+        requests.post(url, params=params, json=data, timeout=30)
         return "Published Successfully"
     except Exception as e:
         return f"Error publishing: {e}"
@@ -907,14 +583,10 @@ def send_message(recipient_id, message_text):
 
     try:
         response = requests.post(url, params=params, json=data, timeout=10)
-        if response.status_code != 200:
-            print(f"❌ Error sending message: {response.status_code} {response.text}")
-            return False
+        response.raise_for_status()
         print(f"✅ Message sent to {recipient_id}")
-        return True
     except Exception as e:
         print(f"❌ Error sending message: {e}")
-        return False
 
 
 def reply_to_comment(comment_id, message):
@@ -929,42 +601,16 @@ def reply_to_comment(comment_id, message):
 
     try:
         response = requests.post(url, params=params, json=data, timeout=10)
-        if response.status_code != 200:
-            print(
-                f"❌ Error replying to comment: {response.status_code} {response.text}"
-            )
-            return False
+        response.raise_for_status()
         print(f"✅ Comment reply sent to {comment_id}")
-        return True
     except Exception as e:
         print(f"❌ Error replying to comment: {e}")
-        return False
 
 
 @app.route("/status", methods=["GET"])
 def bot_status():
     """Return bot status and configuration"""
     cairo_now = get_cairo_time()
-
-    last_post_at = None
-    last_post_id = None
-    try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT value FROM events WHERE key = ?", ("last_facebook_post_at",)
-        )
-        row = cur.fetchone()
-        last_post_at = row[0] if row else None
-        cur.execute(
-            "SELECT value FROM events WHERE key = ?", ("last_facebook_post_id",)
-        )
-        row = cur.fetchone()
-        last_post_id = row[0] if row else None
-        conn.close()
-    except Exception:
-        pass
-
     return jsonify(
         {
             "status": "online",
@@ -972,8 +618,6 @@ def bot_status():
             "active_hours": BOT_CONFIG.get("active_hours", []),
             "mood": BOT_CONFIG.get("system_prompt_mood", "Unknown"),
             "last_post_hour": LAST_POST_HOUR_KEY if LAST_POST_HOUR_KEY else "None",
-            "last_facebook_post_at": last_post_at,
-            "last_facebook_post_id": last_post_id,
             "rss_count": len(BOT_CONFIG.get("rss_feeds", [])),
         }
     )
@@ -985,6 +629,8 @@ def update_config():
     global BOT_CONFIG
 
     # Check Secret
+    if not CRON_SECRET:
+        return "CRON_SECRET is not configured", 500
     secret = request.args.get("secret")
     if secret != CRON_SECRET:
         return "Unauthorized", 401
@@ -1108,16 +754,13 @@ def auto_scheduler():
     للنشر التلقائي في المواعيد المحددة
     """
     # 1. Security Check
+    if not CRON_SECRET:
+        return "CRON_SECRET is not configured", 500
     secret = request.args.get("secret")
     if secret != CRON_SECRET:
         return "Unauthorized", 401
 
-    # 2. Always try Google Sheet first (Human-in-the-Loop priority)
-    sheet_summary = process_due_sheet_posts(max_posts=1)
-    if sheet_summary.get("posted"):
-        return jsonify({"status": "sheet_posted", **sheet_summary}), 200
-
-    # 3. Time Check (Configurable)
+    # 2. Time Check (Configurable)
     cairo_now = get_cairo_time()
     current_hour_key = cairo_now.strftime("%Y-%m-%d-%H")
 
@@ -1138,12 +781,12 @@ def auto_scheduler():
     if LAST_POST_HOUR_KEY == current_hour_key:
         return f"Already posted this hour ({current_hour_key}). Skipping.", 200
 
-    # 4. Generate Content
+    # 3. Generate Content
     idea = fetch_content_idea()
     post_text = generate_social_post(idea)
 
     if post_text:
-        # 5. Publish
+        # 4. Publish
         result = publish_to_facebook(post_text, idea.get("image_url"))
 
         # تحديث وقت آخر نشر بعد النجاح
@@ -1162,106 +805,6 @@ def auto_scheduler():
     return "Failed to generate content", 500
 
 
-@app.route("/publisher-tick", methods=["GET"])
-def publisher_tick():
-    """Minute-level publisher endpoint.
-
-    Call this every minute (cron/uptimerobot). It will publish due Google-Sheet posts.
-    Optionally falls back to random posting only during active hours.
-    """
-    secret = request.args.get("secret")
-    if secret != CRON_SECRET:
-        return "Unauthorized", 401
-
-    # 1) Priority: sheet posts
-    sheet_summary = process_due_sheet_posts(max_posts=2)
-    if sheet_summary.get("posted"):
-        return jsonify({"status": "sheet_posted", **sheet_summary}), 200
-
-    # 2) Fallback: hourly random logic (same as auto-post-trigger)
-    cairo_now = get_cairo_time()
-    current_hour_key = cairo_now.strftime("%Y-%m-%d-%H")
-    global LAST_POST_HOUR_KEY
-
-    if cairo_now.hour not in BOT_CONFIG.get("active_hours", []):
-        return (
-            jsonify(
-                {"status": "noop", "reason": "not_active_hour", "time": str(cairo_now)}
-            ),
-            200,
-        )
-
-    if LAST_POST_HOUR_KEY == current_hour_key:
-        return (
-            jsonify(
-                {
-                    "status": "noop",
-                    "reason": "already_posted_this_hour",
-                    "hour": current_hour_key,
-                }
-            ),
-            200,
-        )
-
-    idea = fetch_content_idea()
-    post_text = generate_social_post(idea)
-    if not post_text:
-        return (
-            jsonify({"status": "error", "message": "Failed to generate content"}),
-            500,
-        )
-
-    result = publish_to_facebook(post_text, idea.get("image_url"))
-    if "Published Successfully" in str(result) or "id" in str(result):
-        LAST_POST_HOUR_KEY = current_hour_key
-
-    return (
-        jsonify(
-            {
-                "status": "random_posted",
-                "time": str(cairo_now),
-                "type": idea.get("type"),
-                "result": result,
-            }
-        ),
-        200,
-    )
-
-
-@app.route("/cms/post-now", methods=["POST"])
-def cms_post_now():
-    """Admin: post a specific Google Sheet row immediately."""
-    if ADMIN_TOKEN and request.headers.get("X-Admin-Token") != ADMIN_TOKEN:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    payload = request.get_json() or {}
-    row_number = int(payload.get("row_number") or 0)
-    if row_number < 2:
-        return jsonify({"error": "row_number required"}), 400
-
-    ws, header = _get_sheet()
-    if not ws or not header:
-        return jsonify({"error": "Google Sheet not configured"}), 500
-
-    # Read row
-    values = ws.row_values(row_number)
-    item = {
-        header[i]: (values[i] if i < len(values) else "") for i in range(len(header))
-    }
-    caption = str(item.get("AI_Caption") or "").strip()
-    image_url = str(item.get("Image_URL") or "").strip()
-    if not caption and not image_url:
-        update_status(ws, row_number, "Failed", header)
-        return jsonify({"error": "Empty row"}), 400
-
-    result = publish_to_facebook(caption, image_url or None)
-    if _is_publish_success(result):
-        update_status(ws, row_number, "Posted", header)
-        return jsonify({"success": True, "result": str(result)}), 200
-    update_status(ws, row_number, "Failed", header)
-    return jsonify({"success": False, "result": str(result)}), 500
-
-
 @app.route("/webhook", methods=["GET"])
 def verify_webhook():
     """Webhook verification for Facebook"""
@@ -1271,7 +814,7 @@ def verify_webhook():
 
     if mode == "subscribe" and token == VERIFY_TOKEN:
         print("✅ Webhook verified successfully!")
-        return challenge, 200
+        return (challenge or ""), 200
     else:
         print("❌ Webhook verification failed")
         return "Forbidden", 403
@@ -1288,69 +831,17 @@ def handle_webhook():
         for entry in data.get("entry", []):
             # Handle Messenger Messages
             for messaging in entry.get("messaging", []):
-                sender_id = (messaging.get("sender") or {}).get("id")
-                msg_obj = messaging.get("message")
-                if not sender_id or not msg_obj:
-                    continue
+                sender_id = messaging["sender"]["id"]
 
-                # نص الرسالة (قد تكون attachments بدون text)
-                if "text" in msg_obj:
-                    message_text = msg_obj.get("text") or ""
-                elif msg_obj.get("attachments"):
-                    message_text = "[attachment]"
-                else:
-                    message_text = "[message]"
+                if "message" in messaging and "text" in messaging["message"]:
+                    message_text = messaging["message"]["text"]
+                    print(f"💬 Message from {sender_id}: {message_text}")
 
-                print(f"💬 Message from {sender_id}: {message_text}")
+                    # Generate response
+                    response = generate_response(message_text)
 
-                # Store in DB (for monitoring/inbox)
-                message_id = None
-                try:
-                    conn = get_db()
-                    cur = conn.cursor()
-                    now = datetime.utcnow().isoformat()
-                    sender_name = f"FB User {str(sender_id)[-4:]}"
-                    cur.execute(
-                        """
-                        INSERT INTO messages (platform, sender_id, sender_name, message_text, received_at, status)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            "messenger",
-                            sender_id,
-                            sender_name,
-                            message_text,
-                            now,
-                            "pending",
-                        ),
-                    )
-                    message_id = cur.lastrowid
-                    conn.commit()
-                    conn.close()
-                except Exception:
-                    pass
-
-                # Generate response (auto-reply)
-                response = generate_response(message_text)
-                if response:
-                    ok = send_message(sender_id, response)
-                    if ok and message_id:
-                        try:
-                            conn = get_db()
-                            cur = conn.cursor()
-                            cur.execute(
-                                "UPDATE messages SET reply_text = ?, replied_at = ?, status = ? WHERE id = ?",
-                                (
-                                    response,
-                                    datetime.utcnow().isoformat(),
-                                    "replied",
-                                    message_id,
-                                ),
-                            )
-                            conn.commit()
-                            conn.close()
-                        except Exception:
-                            pass
+                    # Send back
+                    send_message(sender_id, response)
 
             # Handle Comments
             for change in entry.get("changes", []):
@@ -1365,386 +856,20 @@ def handle_webhook():
                         comment_id = value.get("comment_id")
                         message = value.get("message", "")
                         sender_id = value.get("from", {}).get("id")
-                        sender_name = value.get("from", {}).get("name", "Unknown")
-                        post_id = value.get("post_id")
 
                         # Print debug info
                         print(f"DEBUG: Processing comment from {sender_id}: {message}")
-
-                        # Store in DB (avoid duplicates by comment_id when possible)
-                        comment_row_id = None
-                        if comment_id:
-                            try:
-                                conn = get_db()
-                                cur = conn.cursor()
-                                cur.execute(
-                                    "SELECT id FROM comments WHERE comment_id = ? LIMIT 1",
-                                    (comment_id,),
-                                )
-                                existing = cur.fetchone()
-                                if not existing:
-                                    now = datetime.utcnow().isoformat()
-                                    cur.execute(
-                                        """
-                                        INSERT INTO comments (comment_id, post_id, sender_id, sender_name, comment_text, received_at, status)
-                                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                                        """,
-                                        (
-                                            comment_id,
-                                            post_id,
-                                            sender_id,
-                                            sender_name,
-                                            message,
-                                            now,
-                                            "pending",
-                                        ),
-                                    )
-                                    comment_row_id = cur.lastrowid
-                                    conn.commit()
-                                conn.close()
-                            except Exception:
-                                pass
 
                         # Generate response
                         response = generate_response(message)
 
                         # Reply to comment
                         if response:
-                            ok = reply_to_comment(comment_id, response)
-                            if ok and comment_id:
-                                try:
-                                    conn = get_db()
-                                    cur = conn.cursor()
-                                    cur.execute(
-                                        "UPDATE comments SET reply_text = ?, replied_at = ?, status = ? WHERE comment_id = ?",
-                                        (
-                                            response,
-                                            datetime.utcnow().isoformat(),
-                                            "replied",
-                                            comment_id,
-                                        ),
-                                    )
-                                    conn.commit()
-                                    conn.close()
-                                except Exception:
-                                    pass
+                            reply_to_comment(comment_id, response)
                         else:
                             print("❌ Failed to generate response for comment")
 
     return "OK", 200
-
-
-# ========================================
-# WhatsApp API Endpoints
-# ========================================
-@app.route("/whatsapp/webhook", methods=["GET"])
-def whatsapp_webhook_verify():
-    """Verify WhatsApp webhook subscription"""
-    mode = request.args.get("hub.mode")
-    token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
-
-    if mode == "subscribe" and token == WHATSAPP_VERIFY_TOKEN:
-        return challenge, 200
-    return "Forbidden", 403
-
-
-@app.route("/whatsapp/webhook", methods=["POST"])
-def whatsapp_webhook():
-    """Receive WhatsApp messages and store in DB"""
-    data = request.json
-
-    if not data.get("entry"):
-        return jsonify({"status": "ok"}), 200
-
-    for entry in data.get("entry", []):
-        for change in entry.get("changes", []):
-            if change.get("field") == "messages":
-                messages = change.get("value", {}).get("messages", [])
-                contacts = change.get("value", {}).get("contacts", [])
-
-                contact_map = {
-                    c["wa_id"]: c.get("profile", {}).get("name", "Unknown")
-                    for c in contacts
-                }
-
-                for msg in messages:
-                    sender_id = msg.get("from")
-                    sender_name = contact_map.get(
-                        sender_id, f"Customer {sender_id[-4:]}"
-                    )
-                    message_text = ""
-
-                    # Extract message text (support text, image, button replies, etc.)
-                    if msg.get("type") == "text":
-                        message_text = msg.get("text", {}).get("body", "")
-                    elif msg.get("type") == "button":
-                        message_text = msg.get("button", {}).get("text", "")
-                    else:
-                        message_text = f"[{msg.get('type', 'message')}]"
-
-                    # Store in DB
-                    conn = get_db()
-                    cur = conn.cursor()
-                    cur.execute(
-                        """
-                        INSERT INTO messages (platform, sender_id, sender_name, message_text, received_at, status)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            "whatsapp",
-                            sender_id,
-                            sender_name,
-                            message_text,
-                            datetime.utcnow().isoformat(),
-                            "pending",
-                        ),
-                    )
-                    conn.commit()
-                    conn.close()
-
-                    print(f"✅ WhatsApp message from {sender_name}: {message_text}")
-
-    return jsonify({"status": "ok"}), 200
-
-
-def send_whatsapp_message(phone_number: str, message_text: str) -> bool:
-    """Send a WhatsApp message via Meta API"""
-    if not WHATSAPP_API_TOKEN or not WHATSAPP_PHONE_ID:
-        print("❌ WhatsApp API not configured")
-        return False
-
-    url = f"https://graph.facebook.com/v18.0/{WHATSAPP_PHONE_ID}/messages"
-    headers = {
-        "Authorization": f"Bearer {WHATSAPP_API_TOKEN}",
-        "Content-Type": "application/json",
-    }
-
-    # Meta expects digits only in most cases (country code + number). Normalize safely.
-    phone_number = "".join(ch for ch in str(phone_number) if ch.isdigit())
-    if not phone_number:
-        return False
-
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": phone_number,
-        "type": "text",
-        "text": {"body": message_text},
-    }
-
-    try:
-        response = requests.post(url, json=payload, headers=headers, timeout=10)
-        if response.status_code == 200:
-            print(f"✅ WhatsApp message sent to {phone_number}")
-            return True
-        else:
-            print(f"❌ WhatsApp error: {response.text}")
-            return False
-    except Exception as e:
-        print(f"❌ WhatsApp exception: {str(e)}")
-        return False
-
-
-@app.route("/whatsapp/send", methods=["POST"])
-def whatsapp_send():
-    """Admin endpoint to send WhatsApp message (requires ADMIN_TOKEN)"""
-    if ADMIN_TOKEN and request.headers.get("X-Admin-Token") != ADMIN_TOKEN:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    data = request.json
-    phone = data.get("phone", "")
-    message = data.get("message", "")
-
-    if not phone or not message:
-        return jsonify({"error": "Missing phone or message"}), 400
-
-    success = send_whatsapp_message(phone, message)
-    return jsonify({"success": success}), 200 if success else 500
-
-
-@app.route("/messenger/send", methods=["POST"])
-def messenger_send():
-    """Admin endpoint to send a Messenger message (requires ADMIN_TOKEN)"""
-    if ADMIN_TOKEN and request.headers.get("X-Admin-Token") != ADMIN_TOKEN:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    data = request.json or {}
-    recipient_id = data.get("recipient_id") or data.get("user_id") or ""
-    message = data.get("message", "")
-    if not recipient_id or not message:
-        return jsonify({"error": "Missing recipient_id or message"}), 400
-
-    ok = send_message(recipient_id, message)
-    return jsonify({"success": bool(ok)}), 200 if ok else 500
-
-
-# ========================================
-# Facebook Comments Improvements
-# ========================================
-@app.route("/facebook/comments", methods=["GET"])
-def facebook_comments_verify():
-    """Verify Facebook Webhook"""
-    mode = request.args.get("hub.mode")
-    token = request.args.get("hub.verify_token")
-    challenge = request.args.get("hub.challenge")
-
-    if mode == "subscribe" and token == VERIFY_TOKEN:
-        return challenge, 200
-    return "Forbidden", 403
-
-
-@app.route("/facebook/comments", methods=["POST"])
-def facebook_comments_webhook():
-    """Receive and store Facebook comments"""
-    data = request.json
-
-    if not data.get("entry"):
-        return jsonify({"status": "ok"}), 200
-
-    for entry in data.get("entry", []):
-        for change in entry.get("changes", []):
-            field = change.get("field")
-            if field in ["feed", "comments", "mention"]:
-                value = change.get("value", {})
-
-                if value.get("verb") != "add":
-                    continue
-
-                if value.get("item") == "comment":
-                    comment_id = value.get("comment_id")
-                    post_id = value.get("post_id")
-                    message = value.get("message", "")
-                    sender_id = value.get("from", {}).get("id")
-                    sender_name = value.get("from", {}).get("name", "Unknown")
-
-                    # Store in DB
-                    conn = get_db()
-                    cur = conn.cursor()
-                    cur.execute(
-                        """
-                        INSERT INTO comments (comment_id, post_id, sender_id, sender_name, comment_text, received_at, status)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            comment_id,
-                            post_id,
-                            sender_id,
-                            sender_name,
-                            message,
-                            datetime.utcnow().isoformat(),
-                            "pending",
-                        ),
-                    )
-                    conn.commit()
-                    conn.close()
-
-                    print(f"✅ Facebook comment from {sender_name}: {message}")
-
-    return jsonify({"status": "ok"}), 200
-
-
-def reply_to_facebook_comment(comment_id: str, reply_text: str) -> bool:
-    """Reply to a Facebook comment"""
-    if not PAGE_ACCESS_TOKEN:
-        return False
-
-    url = f"https://graph.facebook.com/v18.0/{comment_id}/comments"
-    params = {"access_token": PAGE_ACCESS_TOKEN}
-    data = {"message": reply_text}
-
-    try:
-        response = requests.post(url, params=params, json=data, timeout=10)
-        if response.status_code == 200:
-            # تحديث DB
-            conn = get_db()
-            cur = conn.cursor()
-            cur.execute(
-                "UPDATE comments SET reply_text = ?, replied_at = ?, status = ? WHERE comment_id = ?",
-                (reply_text, datetime.utcnow().isoformat(), "replied", comment_id),
-            )
-            conn.commit()
-            conn.close()
-            return True
-        return False
-    except Exception as e:
-        print(f"❌ Facebook reply error: {str(e)}")
-        return False
-
-
-@app.route("/facebook/comments/reply", methods=["POST"])
-def facebook_comment_reply():
-    """Admin endpoint to reply to a Facebook comment"""
-    if ADMIN_TOKEN and request.headers.get("X-Admin-Token") != ADMIN_TOKEN:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    data = request.json
-    comment_id = data.get("comment_id", "")
-    reply = data.get("reply", "")
-
-    if not comment_id or not reply:
-        return jsonify({"error": "Missing comment_id or reply"}), 400
-
-    success = reply_to_facebook_comment(comment_id, reply)
-    return jsonify({"success": success}), 200 if success else 500
-
-
-@app.route("/messages/list", methods=["GET"])
-def get_messages_list():
-    """Get all pending messages (WhatsApp + Facebook comments)"""
-    if ADMIN_TOKEN and request.headers.get("X-Admin-Token") != ADMIN_TOKEN:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    conn = get_db()
-    cur = conn.cursor()
-
-    # الرسائل
-    cur.execute(
-        "SELECT id, platform, sender_id, sender_name, message_text, received_at, status FROM messages ORDER BY received_at DESC LIMIT 100"
-    )
-    messages = [
-        {
-            "id": row[0],
-            "type": "message",
-            "platform": row[1],
-            "sender_id": row[2],
-            "sender": row[3],
-            "content": row[4],
-            "received_at": row[5],
-            "status": row[6],
-            "reply_target": row[2],
-        }
-        for row in cur.fetchall()
-    ]
-
-    # التعليقات
-    cur.execute(
-        "SELECT id, comment_id, post_id, sender_id, sender_name, comment_text, received_at, status FROM comments ORDER BY received_at DESC LIMIT 100"
-    )
-    comments = [
-        {
-            "id": row[0],
-            "type": "comment",
-            "platform": "facebook",
-            "comment_id": row[1],
-            "post_id": row[2],
-            "sender_id": row[3],
-            "sender": row[4],
-            "content": row[5],
-            "received_at": row[6],
-            "status": row[7],
-            "reply_target": row[1],
-        }
-        for row in cur.fetchall()
-    ]
-
-    conn.close()
-
-    # دمج الرسائل والتعليقات وترتيبها حسب الوقت
-    all_items = sorted(
-        messages + comments, key=lambda x: x.get("received_at", ""), reverse=True
-    )
-
-    return jsonify({"items": all_items}), 200
 
 
 if __name__ == "__main__":

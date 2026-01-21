@@ -15,24 +15,6 @@ from pathlib import Path
 from datetime import datetime
 from io import BytesIO
 
-# Optional: Google Sheets CMS
-try:
-    import gspread  # noqa: F401
-
-    from gsheets_cms import (
-        SheetConfig,
-        ensure_headers,
-        list_rows,
-        make_gspread_client,
-        open_worksheet,
-        update_caption,
-        update_status,
-    )
-
-    GSHEETS_AVAILABLE = True
-except Exception:
-    GSHEETS_AVAILABLE = False
-
 # Load environment variables
 # from dotenv import load_dotenv
 # load_dotenv()
@@ -63,57 +45,19 @@ except ImportError:
 DATA_FILE = Path(__file__).parent / "academy_data.json"
 # ENV_FILE = Path(__file__).parent / ".env" # No longer needed with Streamlit Secrets
 
-
-def _get_setting(key: str, default: str = "") -> str:
-    """Read config from Streamlit Secrets first, then environment variables.
-
-    This enables running the dashboard on Render (env vars) or Streamlit Cloud (secrets).
-    """
-
-    value = None
-    try:
-        value = st.secrets.get(key, None)
-    except FileNotFoundError:
-        value = None
-    except Exception:
-        value = None
-
-    if value is None or value == "":
-        value = os.environ.get(key, default)
-
-    return str(value) if value is not None else str(default)
-
-
-def _get_gcp_service_account_info():
-    """Return service account dict from secrets or GOOGLE_SERVICE_ACCOUNT_JSON env var."""
-
-    try:
-        svc = st.secrets.get("gcp_service_account", None)
-    except FileNotFoundError:
-        svc = None
-    except Exception:
-        svc = None
-
-    if svc:
-        try:
-            return dict(svc)
-        except Exception:
-            return None
-
-    raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "")
-    if raw:
-        try:
-            return json.loads(raw)
-        except Exception:
-            return None
-
-    return None
-
-# API keys: Streamlit Secrets OR environment variables (Render)
-GROQ_API_KEY = _get_setting("GROQ_API_KEY_4", "")
-NVIDIA_API_KEY = _get_setting("NVIDIA_API_KEY", "")
-IMGBB_API_KEY = _get_setting("IMGBB_API_KEY", "")
-PAGE_ACCESS_TOKEN = _get_setting("PAGE_ACCESS_TOKEN", "")
+# API Keys from Streamlit Secrets
+# Ensure you have a .streamlit/secrets.toml file locally or secrets set up in Streamlit Cloud
+try:
+    GROQ_API_KEY = st.secrets.get("GROQ_API_KEY_4", "")
+    NVIDIA_API_KEY = st.secrets.get("NVIDIA_API_KEY", "")
+    IMGBB_API_KEY = st.secrets.get("IMGBB_API_KEY", "")
+    PAGE_ACCESS_TOKEN = st.secrets.get("PAGE_ACCESS_TOKEN", "")
+except FileNotFoundError:
+    st.error("ملف secrets.toml غير موجود. يرجى إعداد أسرار Streamlit.")
+    GROQ_API_KEY = ""
+    NVIDIA_API_KEY = ""
+    IMGBB_API_KEY = ""
+    PAGE_ACCESS_TOKEN = ""
 
 # Back-compat alias used across the app
 groq_key = GROQ_API_KEY
@@ -548,7 +492,7 @@ def _get_query_param(name: str):
 if _get_query_param("sg") == "1":
     from secret_gate_ui import render_secret_gate
 
-    BACKEND_URL = _get_setting("BACKEND_URL", "https://your-render-app.onrender.com")
+    BACKEND_URL = st.secrets.get("BACKEND_URL", "https://your-render-app.onrender.com")
     render_secret_gate(BACKEND_URL, standalone=False)
     st.stop()
 
@@ -1281,7 +1225,7 @@ st.markdown(
 )
 
 # --- Navigation Tabs ---
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
     [
         "✨ المحتوى",
         "🤖 الأتمتة",
@@ -1289,7 +1233,6 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
         "📊 نظرة عامة",
         "⚙️ الإعدادات",
         "🚀 دليل الإعداد",
-        "📱 الرسائل",
     ]
 )
 
@@ -1478,109 +1421,6 @@ with tab2:
     st.markdown("## 🤖 غرفة عمليات كابتن عز (نظام الأتمتة)")
     st.info("هنا يمكنك التحكم في 'عقل' البوت، وتجربة ما سينشره تلقائياً قبل حدوثه.")
 
-    # ========================================
-    # Pending Posts (Google Sheets CMS)
-    # ========================================
-    st.markdown("### 🗂️ Pending Posts (Google Sheets CMS)")
-    st.caption(
-        "أي صورة تبعتها على تيليجرام تتحجز هنا 30 دقيقة قبل النشر — تقدر تعدّل الكابشن أو تنشر فوراً."
-    )
-
-    if not GSHEETS_AVAILABLE:
-        st.warning(
-            "Google Sheets integration غير متاحة: ثبّت gspread في requirements.txt"
-        )
-    else:
-        sheet_id = _get_setting("GOOGLE_SHEET_ID", "")
-        worksheet_name = _get_setting("GOOGLE_SHEET_WORKSHEET", "Buffer") or "Buffer"
-        svc = _get_gcp_service_account_info()
-
-        col_cfg1, col_cfg2 = st.columns([2, 1])
-        with col_cfg1:
-            sheet_id = st.text_input(
-                "Google Sheet ID", value=sheet_id, placeholder="1AbC...sheetId..."
-            )
-        with col_cfg2:
-            worksheet_name = st.text_input("Worksheet", value=worksheet_name)
-
-        if not sheet_id:
-            st.info("أضف GOOGLE_SHEET_ID في Streamlit Secrets علشان يظهر البافر.")
-        elif not svc:
-            st.warning(
-                "أضف بيانات Service Account في Streamlit Secrets تحت [gcp_service_account] ثم شارك الشيت مع email بتاعها."
-            )
-        else:
-            try:
-                client = make_gspread_client(dict(svc))
-                cfg = SheetConfig(sheet_id=sheet_id, worksheet=worksheet_name)
-                ws = open_worksheet(client, cfg)
-                header = ensure_headers(ws)
-                rows = list_rows(ws)
-
-                scheduled = [
-                    r
-                    for r in rows
-                    if str(r.get("Status", "")).strip().lower() == "scheduled"
-                ]
-
-                if not scheduled:
-                    st.success("✅ لا توجد منشورات معلّقة في الشيت.")
-                else:
-                    for r in scheduled[:25]:
-                        row_number = int(r.get("_row_number") or 0)
-                        if row_number < 2:
-                            continue
-                        img_url = str(r.get("Image_URL") or "").strip()
-                        caption = str(r.get("AI_Caption") or "").strip()
-                        scheduled_time = str(r.get("Scheduled_Time") or "").strip()
-
-                        with st.container(border=True):
-                            st.markdown(
-                                f"**Row:** {row_number} • **Scheduled:** {scheduled_time}"
-                            )
-                            if img_url:
-                                st.image(img_url, use_container_width=True)
-
-                            new_caption = st.text_area(
-                                "Caption",
-                                value=caption,
-                                key=f"cms_caption_{row_number}",
-                                height=120,
-                            )
-
-                            c1, c2, c3 = st.columns(3)
-                            with c1:
-                                if st.button(
-                                    "💾 Save/Update", key=f"cms_save_{row_number}"
-                                ):
-                                    update_caption(ws, row_number, new_caption, header)
-                                    st.success("✅ تم حفظ التعديل")
-
-                            with c2:
-                                if st.button(
-                                    "🚀 Post Now", key=f"cms_post_{row_number}"
-                                ):
-                                    # Post from dashboard (uses PAGE_ACCESS_TOKEN already loaded)
-                                    result, err = post_to_facebook_page(
-                                        new_caption,
-                                        PAGE_ACCESS_TOKEN,
-                                        image_url=img_url or None,
-                                    )
-                                    if err:
-                                        update_status(ws, row_number, "Failed", header)
-                                        st.error(err)
-                                    else:
-                                        update_status(ws, row_number, "Posted", header)
-                                        st.success("✅ تم النشر وتحديث الشيت")
-
-                            with c3:
-                                if st.button("🗑️ Delete", key=f"cms_del_{row_number}"):
-                                    update_status(ws, row_number, "Cancelled", header)
-                                    st.success("✅ تم الإلغاء")
-
-            except Exception as e:
-                st.error(f"❌ خطأ في Google Sheets: {str(e)}")
-
     # --- Configuration Section ---
     with st.expander("⚙️ إعدادات الشخصية والجدولة (تحكم حي)", expanded=False):
         st.info("💡 هذه الإعدادات سترسل إلى سيرفر البوت فوراً.")
@@ -1715,8 +1555,6 @@ https://www.youm7.com/rss/SectionRss?SectionID=298"""
                 - **عدد المصادر:** {bs.get('rss_count')}
                 - **مزاج الكابتن:** {bs.get('mood')}
                 - **آخر نشر تلقائي:** {bs.get('last_post_hour')}
-                - **آخر بوست فيسبوك (UTC):** {bs.get('last_facebook_post_at')}
-                - **آخر Post ID:** {bs.get('last_facebook_post_id')}
                 """
                 )
 
@@ -2715,219 +2553,14 @@ PAGE_ACCESS_TOKEN=EAAxxxxxxxxxxxxxxx
         """
         )
 
-# ========================================
-# TAB 7: Message Management (WhatsApp + Facebook Comments)
-# ========================================
-with tab7:
-    st.markdown("## 📱 إدارة الرسائل (WhatsApp + التعليقات)")
-    st.info(
-        "استقبل ورد على رسائل العملاء من WhatsApp والتعليقات على Facebook من مكان واحد"
-    )
-
-    BACKEND_URL = _get_setting("BACKEND_URL", "https://your-render-app.onrender.com")
-    ADMIN_TOKEN = _get_setting("ADMIN_TOKEN", "")
-
-    col_tab, col_refresh = st.columns([3, 1])
-    with col_refresh:
-        if st.button("🔄 تحديث"):
-            st.rerun()
-
-    with col_tab:
-        view_mode = st.radio(
-            "اختر العرض:", ["الرسائل المعلقة", "كل الرسائل"], horizontal=True
-        )
-
-    # Fetch messages
-    try:
-        headers = {"X-Admin-Token": ADMIN_TOKEN} if ADMIN_TOKEN else {}
-        response = requests.get(
-            f"{BACKEND_URL}/messages/list", headers=headers, timeout=10
-        )
-
-        if response.status_code == 200:
-            items = response.json().get("items", [])
-
-            # Filter based on view mode
-            if view_mode == "الرسائل المعلقة":
-                items = [i for i in items if i.get("status") != "replied"]
-
-            if not items:
-                st.success("✅ لا توجد رسائل معلقة!")
-            else:
-                for idx, item in enumerate(items):
-                    with st.container(border=True):
-                        col1, col2 = st.columns([1, 6])
-
-                        with col1:
-                            platform = item.get("platform")
-                            if platform == "whatsapp":
-                                st.markdown("💬 **WhatsApp**")
-                            elif platform == "messenger":
-                                st.markdown("📨 **Messenger**")
-                            else:
-                                st.markdown("👍 **Facebook**")
-
-                            status_icon = (
-                                "✅" if item.get("status") == "replied" else "⏳"
-                            )
-                            st.markdown(
-                                f"{status_icon} {item.get('status', 'unknown')}"
-                            )
-
-                        with col2:
-                            st.markdown(f"**{item.get('sender')}**")
-                            st.markdown(f"> {item.get('content')}")
-
-                            if item.get("platform") == "whatsapp":
-                                # Show reply form for WhatsApp messages
-                                reply_key = f"reply_{item.get('id')}"
-                                reply_text = st.text_input(
-                                    "الرد:",
-                                    key=reply_key,
-                                    placeholder="اكتب ردك هنا...",
-                                    label_visibility="collapsed",
-                                )
-
-                                if reply_text:
-                                    col_send, col_cancel = st.columns(2)
-                                    with col_send:
-                                        if st.button("📤 إرسال رد", key=f"send_{idx}"):
-                                            try:
-                                                target_phone = item.get(
-                                                    "reply_target"
-                                                ) or item.get("sender_id")
-                                                send_response = requests.post(
-                                                    f"{BACKEND_URL}/whatsapp/send",
-                                                    json={
-                                                        "phone": target_phone,
-                                                        "message": reply_text,
-                                                    },
-                                                    headers=headers,
-                                                    timeout=10,
-                                                )
-                                                if send_response.status_code == 200:
-                                                    st.success("✅ تم إرسال الرد!")
-                                                    st.rerun()
-                                                else:
-                                                    st.error("❌ فشل إرسال الرد")
-                                            except Exception as e:
-                                                st.error(f"❌ خطأ: {str(e)}")
-
-                            elif item.get("platform") == "messenger":
-                                reply_key = f"reply_{item.get('id')}"
-                                reply_text = st.text_input(
-                                    "الرد على Messenger:",
-                                    key=reply_key,
-                                    placeholder="اكتب ردك هنا...",
-                                    label_visibility="collapsed",
-                                )
-
-                                if reply_text:
-                                    col_send, col_cancel = st.columns(2)
-                                    with col_send:
-                                        if st.button("📤 إرسال رد", key=f"send_{idx}"):
-                                            try:
-                                                recipient_id = item.get(
-                                                    "reply_target"
-                                                ) or item.get("sender_id")
-                                                send_response = requests.post(
-                                                    f"{BACKEND_URL}/messenger/send",
-                                                    json={
-                                                        "recipient_id": recipient_id,
-                                                        "message": reply_text,
-                                                    },
-                                                    headers=headers,
-                                                    timeout=10,
-                                                )
-                                                if send_response.status_code == 200:
-                                                    st.success("✅ تم إرسال الرد!")
-                                                    st.rerun()
-                                                else:
-                                                    st.error("❌ فشل إرسال الرد")
-                                            except Exception as e:
-                                                st.error(f"❌ خطأ: {str(e)}")
-
-                            elif item.get("platform") == "facebook":
-                                # Show reply form for Facebook comments
-                                reply_key = f"reply_{item.get('id')}"
-                                reply_text = st.text_input(
-                                    "الرد على التعليق:",
-                                    key=reply_key,
-                                    placeholder="اكتب ردك على التعليق...",
-                                    label_visibility="collapsed",
-                                )
-
-                                if reply_text:
-                                    col_send, col_cancel = st.columns(2)
-                                    with col_send:
-                                        if st.button("📤 إرسال رد", key=f"send_{idx}"):
-                                            try:
-                                                send_response = requests.post(
-                                                    f"{BACKEND_URL}/facebook/comments/reply",
-                                                    json={
-                                                        "comment_id": item.get(
-                                                            "reply_target"
-                                                        )
-                                                        or item.get("comment_id"),
-                                                        "reply": reply_text,
-                                                    },
-                                                    headers=headers,
-                                                    timeout=10,
-                                                )
-                                                if send_response.status_code == 200:
-                                                    st.success("✅ تم إرسال الرد!")
-                                                    st.rerun()
-                                                else:
-                                                    st.error("❌ فشل إرسال الرد")
-                                            except Exception as e:
-                                                st.error(f"❌ خطأ: {str(e)}")
-
-        else:
-            st.error(f"❌ خطأ في الاتصال: {response.status_code}")
-
-    except Exception as e:
-        st.error(f"❌ خطأ: {str(e)}")
-
-    # Configuration Section
-    st.markdown("---")
-    st.markdown("### ⚙️ إعدادات Webhooks")
-
-    with st.expander("🔗 روابط Webhooks للنسخ (Meta App)"):
-        backend_url = _get_setting("BACKEND_URL", "https://your-render-app.onrender.com")
-
-        st.markdown("#### Facebook (Messenger + Comments) Webhook URL")
-        st.code(f"{backend_url}/webhook")
-        st.caption(
-            "في Meta Developers: استخدم نفس Callback URL ثم فعّل subscriptions: messages + feed"
-        )
-
-        st.markdown("#### WhatsApp Webhook URL")
-        st.code(f"{backend_url}/whatsapp/webhook")
-        st.caption("انسخ هذا الرابط وأضفه في إعدادات WhatsApp Business API")
-
-        st.markdown("#### (اختياري) Facebook Comments Webhook URL")
-        st.code(f"{backend_url}/facebook/comments")
-        st.caption(
-            "اختياري لو حابب تفصل التعليقات عن /webhook. غالباً مش محتاجه لو /webhook متفعل عليه feed."
-        )
-
-    with st.expander("📝 نموذج Secrets (للنسخ)"):
-        secrets_text = """# WhatsApp & Facebook Integration
-WHATSAPP_API_TOKEN=your_meta_access_token
-WHATSAPP_PHONE_ID=your_whatsapp_phone_id
-WHATSAPP_VERIFY_TOKEN=academy_whatsapp_2026
-ADMIN_TOKEN=your_admin_token
-"""
-        st.code(secrets_text, language="toml")
-
 # --- Footer ---
 st.markdown("---")
 footer_data = load_academy_data()
 st.markdown(
     f"""
 <div class="premium-footer">
-    <p>🥋 <strong>{footer_data.get('academy_name', 'الأكاديمية')}</strong> - v5.0 Premium</p>
-    <p style="font-size: 0.85rem; margin-top: 0.5rem;">Powered by Groq AI + Facebook API + WhatsApp API 🚀</p>
+    <p>🥋 <strong>{footer_data.get('academy_name', 'الأكاديمية')}</strong> - v4.1 Premium</p>
+    <p style="font-size: 0.85rem; margin-top: 0.5rem;">Powered by Groq AI + Facebook API 🚀</p>
 </div>
 """,
     unsafe_allow_html=True,

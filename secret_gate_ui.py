@@ -123,7 +123,9 @@ def render_secret_gate(backend_url: str, *, standalone: bool = False) -> None:
 """,
             unsafe_allow_html=True,
         )
-        value = st.text_input("🗝️ إجابتك:", type="password", key="gate1", placeholder="(سؤال تمويه)")
+        value = st.text_input(
+            "🗝️ إجابتك:", type="password", key="gate1", placeholder="(سؤال تمويه)"
+        )
         if st.button("فتح", key="btn_gate1", use_container_width=True):
             if value == "سمسم":
                 st.session_state.gate1_passed = True
@@ -212,16 +214,22 @@ def render_secret_gate(backend_url: str, *, standalone: bool = False) -> None:
             _reset_gates()
             st.rerun()
 
-    count = st.number_input("📊 عدد الأكواد", min_value=1, max_value=200, value=10, step=1)
+    count = st.number_input(
+        "📊 عدد الأكواد", min_value=1, max_value=200, value=10, step=1
+    )
     duration = st.selectbox(
         "📅 مدة الاشتراك",
         options=[7, 14, 30, 60, 90, 180, 365],
         index=2,
-        format_func=lambda x: f"{x} يوم" if x < 30 else f"{x // 30} شهر" if x % 30 == 0 else f"{x} يوم",
+        format_func=lambda x: (
+            f"{x} يوم" if x < 30 else f"{x // 30} شهر" if x % 30 == 0 else f"{x} يوم"
+        ),
     )
 
     if not st.secrets.get("ADMIN_TOKEN", ""):
-        st.error("⚠️ لازم تضيف ADMIN_TOKEN في Streamlit Secrets عشان التوليد يشتغل بشكل آمن.")
+        st.error(
+            "⚠️ لازم تضيف ADMIN_TOKEN في Streamlit Secrets عشان التوليد يشتغل بشكل آمن."
+        )
         return
 
     if st.button("🎫 توليد الآن", type="primary", use_container_width=True):
@@ -247,7 +255,10 @@ def render_secret_gate(backend_url: str, *, standalone: bool = False) -> None:
                     )
                     with st.expander("📜 عرض فردي"):
                         for i, code in enumerate(codes, 1):
-                            st.markdown(f"<div class='code-box'>{i}. {code}</div>", unsafe_allow_html=True)
+                            st.markdown(
+                                f"<div class='code-box'>{i}. {code}</div>",
+                                unsafe_allow_html=True,
+                            )
                 elif resp.status_code in (401, 403):
                     st.error("❌ غير مصرح.")
                 else:

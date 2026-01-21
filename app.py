@@ -354,9 +354,7 @@ def fetch_rss_images(sport, data):
                         if "<img" in value:
                             import re
 
-                            img_urls = re.findall(
-                                r'src="([^"]+)"', value
-                            )
+                            img_urls = re.findall(r'src="([^"]+)"', value)
                             for img_url in img_urls:
                                 if img_url.startswith("http"):
                                     images.append(
@@ -452,10 +450,10 @@ st.set_page_config(
 # Streamlit Cloud غالباً يتجاهل مسارات مثل /secret_gate ويعرض الصفحة الرئيسية.
 # هذا سكربت صغير يعمل redirect إلى ?sg=1 بحيث نقدر ندخل البوابة تلقائياً.
 try:
-        import streamlit.components.v1 as _components
+    import streamlit.components.v1 as _components
 
-        _components.html(
-                r"""
+    _components.html(
+        r"""
 <script>
 (function () {
     try {
@@ -473,11 +471,11 @@ try:
 })();
 </script>
 """,
-                height=0,
-                width=0,
-        )
+        height=0,
+        width=0,
+    )
 except Exception:
-        pass
+    pass
 
 
 def _get_query_param(name: str):
@@ -1227,7 +1225,7 @@ st.markdown(
 )
 
 # --- Navigation Tabs ---
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
     [
         "✨ المحتوى",
         "🤖 الأتمتة",
@@ -1235,6 +1233,7 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
         "📊 نظرة عامة",
         "⚙️ الإعدادات",
         "🚀 دليل الإعداد",
+        "📱 الرسائل",
     ]
 )
 
@@ -2555,14 +2554,152 @@ PAGE_ACCESS_TOKEN=EAAxxxxxxxxxxxxxxx
         """
         )
 
+# ========================================
+# TAB 7: Message Management (WhatsApp + Facebook Comments)
+# ========================================
+with tab7:
+    st.markdown("## 📱 إدارة الرسائل (WhatsApp + التعليقات)")
+    st.info("استقبل ورد على رسائل العملاء من WhatsApp والتعليقات على Facebook من مكان واحد")
+
+    BACKEND_URL = st.secrets.get("BACKEND_URL", "https://your-render-app.onrender.com")
+    ADMIN_TOKEN = st.secrets.get("ADMIN_TOKEN", "")
+
+    col_tab, col_refresh = st.columns([3, 1])
+    with col_refresh:
+        if st.button("🔄 تحديث"):
+            st.rerun()
+
+    with col_tab:
+        view_mode = st.radio("اختر العرض:", ["الرسائل المعلقة", "كل الرسائل"], horizontal=True)
+
+    # Fetch messages
+    try:
+        headers = {"X-Admin-Token": ADMIN_TOKEN} if ADMIN_TOKEN else {}
+        response = requests.get(f"{BACKEND_URL}/messages/list", headers=headers, timeout=10)
+
+        if response.status_code == 200:
+            items = response.json().get("items", [])
+
+            # Filter based on view mode
+            if view_mode == "الرسائل المعلقة":
+                items = [i for i in items if i.get("status") != "replied"]
+
+            if not items:
+                st.success("✅ لا توجد رسائل معلقة!")
+            else:
+                for idx, item in enumerate(items):
+                    with st.container(border=True):
+                        col1, col2 = st.columns([1, 6])
+
+                        with col1:
+                            if item.get("platform") == "whatsapp":
+                                st.markdown("💬 **WhatsApp**")
+                            else:
+                                st.markdown("👍 **Facebook**")
+
+                            status_icon = "✅" if item.get("status") == "replied" else "⏳"
+                            st.markdown(f"{status_icon} {item.get('status', 'unknown')}")
+
+                        with col2:
+                            st.markdown(f"**{item.get('sender')}**")
+                            st.markdown(f"> {item.get('content')}")
+
+                            if item.get("platform") == "whatsapp":
+                                # Show reply form for WhatsApp messages
+                                reply_key = f"reply_{item.get('id')}"
+                                reply_text = st.text_input(
+                                    "الرد:",
+                                    key=reply_key,
+                                    placeholder="اكتب ردك هنا...",
+                                    label_visibility="collapsed"
+                                )
+
+                                if reply_text:
+                                    col_send, col_cancel = st.columns(2)
+                                    with col_send:
+                                        if st.button("📤 إرسال رد", key=f"send_{idx}"):
+                                            try:
+                                                send_response = requests.post(
+                                                    f"{BACKEND_URL}/whatsapp/send",
+                                                    json={"phone": item.get("sender"), "message": reply_text},
+                                                    headers=headers,
+                                                    timeout=10
+                                                )
+                                                if send_response.status_code == 200:
+                                                    st.success("✅ تم إرسال الرد!")
+                                                    st.rerun()
+                                                else:
+                                                    st.error("❌ فشل إرسال الرد")
+                                            except Exception as e:
+                                                st.error(f"❌ خطأ: {str(e)}")
+
+                            elif item.get("platform") == "facebook":
+                                # Show reply form for Facebook comments
+                                reply_key = f"reply_{item.get('id')}"
+                                reply_text = st.text_input(
+                                    "الرد على التعليق:",
+                                    key=reply_key,
+                                    placeholder="اكتب ردك على التعليق...",
+                                    label_visibility="collapsed"
+                                )
+
+                                if reply_text:
+                                    col_send, col_cancel = st.columns(2)
+                                    with col_send:
+                                        if st.button("📤 إرسال رد", key=f"send_{idx}"):
+                                            try:
+                                                send_response = requests.post(
+                                                    f"{BACKEND_URL}/facebook/comments/reply",
+                                                    json={"comment_id": item.get("id"), "reply": reply_text},
+                                                    headers=headers,
+                                                    timeout=10
+                                                )
+                                                if send_response.status_code == 200:
+                                                    st.success("✅ تم إرسال الرد!")
+                                                    st.rerun()
+                                                else:
+                                                    st.error("❌ فشل إرسال الرد")
+                                            except Exception as e:
+                                                st.error(f"❌ خطأ: {str(e)}")
+
+        else:
+            st.error(f"❌ خطأ في الاتصال: {response.status_code}")
+
+    except Exception as e:
+        st.error(f"❌ خطأ: {str(e)}")
+
+    # Configuration Section
+    st.markdown("---")
+    st.markdown("### ⚙️ إعدادات Webhooks")
+
+    with st.expander("🔗 روابط Webhooks للنسخ (Meta App)"):
+        backend_url = st.secrets.get("BACKEND_URL", "https://your-render-app.onrender.com")
+
+        st.markdown("#### WhatsApp Webhook URL")
+        st.code(f"{backend_url}/whatsapp/webhook")
+        st.caption("انسخ هذا الرابط وأضفه في إعدادات WhatsApp Business API")
+
+        st.markdown("#### Facebook Comments Webhook URL")
+        st.code(f"{backend_url}/facebook/comments")
+        st.caption("انسخ هذا الرابط وأضفه في إعدادات Facebook App للتعليقات")
+
+    with st.expander("📝 نموذج Secrets (للنسخ)"):
+        secrets_text = """# WhatsApp & Facebook Integration
+WHATSAPP_API_TOKEN=your_meta_access_token
+WHATSAPP_PHONE_ID=your_whatsapp_phone_id
+WHATSAPP_VERIFY_TOKEN=academy_whatsapp_2026
+ADMIN_TOKEN=your_admin_token
+"""
+        st.code(secrets_text, language="toml")
+
 # --- Footer ---
 st.markdown("---")
 footer_data = load_academy_data()
 st.markdown(
     f"""
 <div class="premium-footer">
-    <p>🥋 <strong>{footer_data.get('academy_name', 'الأكاديمية')}</strong> - v4.1 Premium</p>
-    <p style="font-size: 0.85rem; margin-top: 0.5rem;">Powered by Groq AI + Facebook API 🚀</p>
+    <p>🥋 <strong>{footer_data.get('academy_name', 'الأكاديمية')}</strong> - v5.0 Premium</p>
+    <p style="font-size: 0.85rem; margin-top: 0.5rem;">Powered by Groq AI + Facebook API + WhatsApp API 🚀</p>
 </div>
 """,
     unsafe_allow_html=True,

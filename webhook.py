@@ -19,13 +19,18 @@ VERIFY_TOKEN = "academy_webhook_2026"
 CRON_SECRET = "my_secret_cron_key_123"  # حماية للرابط عشان محدش غيرك يشغله
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")  # حماية احترافية لتوليد الأكواد (Header)
 
+# WhatsApp API
+WHATSAPP_API_TOKEN = os.environ.get("WHATSAPP_API_TOKEN", "")
+WHATSAPP_PHONE_ID = os.environ.get("WHATSAPP_PHONE_ID", "")
+WHATSAPP_VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "academy_whatsapp_2026")
+
 # بسيط ومفيد ضد التخمين (in-memory). مناسب لـ Render single instance.
 _GEN_FAILS = {}
 _GEN_BLOCKED_UNTIL = {}
 
 
 def _landing_html(dashboard_url: str) -> str:
-        return f"""<!doctype html>
+    return f"""<!doctype html>
 <html lang=\"ar\" dir=\"rtl\">
 <head>
     <meta charset=\"utf-8\" />
@@ -121,13 +126,14 @@ def _landing_html(dashboard_url: str) -> str:
 
 @app.route("/", methods=["GET"])
 def landing_page():
-        dashboard_url = os.environ.get("DASHBOARD_URL") or "https://october.streamlit.app/"
-        return Response(_landing_html(dashboard_url), mimetype="text/html")
+    dashboard_url = os.environ.get("DASHBOARD_URL") or "https://october.streamlit.app/"
+    return Response(_landing_html(dashboard_url), mimetype="text/html")
 
 
 @app.route("/health", methods=["GET"])
 def health():
-        return jsonify({"status": "ok", "service": "academy-webhook"})
+    return jsonify({"status": "ok", "service": "academy-webhook"})
+
 
 # Initialize Groq
 client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
@@ -162,6 +168,38 @@ def init_db():
             used_by TEXT,
             used_at TEXT,
             created_at TEXT
+        )
+        """
+    )
+    # جداول جديدة للرسائل والتعليقات
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            platform TEXT,  -- 'whatsapp' or 'facebook'
+            sender_id TEXT,
+            sender_name TEXT,
+            message_text TEXT,
+            received_at TIMESTAMP,
+            reply_text TEXT,
+            replied_at TIMESTAMP,
+            status TEXT  -- 'pending', 'replied'
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS comments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            comment_id TEXT,
+            post_id TEXT,
+            sender_id TEXT,
+            sender_name TEXT,
+            comment_text TEXT,
+            received_at TIMESTAMP,
+            reply_text TEXT,
+            replied_at TIMESTAMP,
+            status TEXT  -- 'pending', 'replied'
         )
         """
     )
@@ -661,7 +699,11 @@ def gen_vouchers():
     Professional security: require ADMIN_TOKEN via X-Admin-Token header (if configured).
     UI gates are NOT considered security.
     """
-    ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or request.remote_addr or "unknown"
+    ip = (
+        request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        or request.remote_addr
+        or "unknown"
+    )
     now_ts = datetime.utcnow().timestamp()
 
     blocked_until = _GEN_BLOCKED_UNTIL.get(ip)
@@ -866,6 +908,267 @@ def handle_webhook():
                             print("❌ Failed to generate response for comment")
 
     return "OK", 200
+
+
+# ========================================
+# WhatsApp API Endpoints
+# ========================================
+@app.route("/whatsapp/webhook", methods=["GET"])
+def whatsapp_webhook_verify():
+    """Verify WhatsApp webhook subscription"""
+    mode = request.args.get("hub.mode")
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
+
+    if mode == "subscribe" and token == WHATSAPP_VERIFY_TOKEN:
+        return challenge, 200
+    return "Forbidden", 403
+
+
+@app.route("/whatsapp/webhook", methods=["POST"])
+def whatsapp_webhook():
+    """Receive WhatsApp messages and store in DB"""
+    data = request.json
+
+    if not data.get("entry"):
+        return jsonify({"status": "ok"}), 200
+
+    for entry in data.get("entry", []):
+        for change in entry.get("changes", []):
+            if change.get("field") == "messages":
+                messages = change.get("value", {}).get("messages", [])
+                contacts = change.get("value", {}).get("contacts", [])
+
+                contact_map = {c["wa_id"]: c.get("profile", {}).get("name", "Unknown") for c in contacts}
+
+                for msg in messages:
+                    sender_id = msg.get("from")
+                    sender_name = contact_map.get(sender_id, f"Customer {sender_id[-4:]}")
+                    message_text = ""
+
+                    # Extract message text (support text, image, button replies, etc.)
+                    if msg.get("type") == "text":
+                        message_text = msg.get("text", {}).get("body", "")
+                    elif msg.get("type") == "button":
+                        message_text = msg.get("button", {}).get("text", "")
+                    else:
+                        message_text = f"[{msg.get('type', 'message')}]"
+
+                    # Store in DB
+                    conn = get_db()
+                    cur = conn.cursor()
+                    cur.execute(
+                        """
+                        INSERT INTO messages (platform, sender_id, sender_name, message_text, received_at, status)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        ("whatsapp", sender_id, sender_name, message_text, datetime.utcnow().isoformat(), "pending")
+                    )
+                    conn.commit()
+                    conn.close()
+
+                    print(f"✅ WhatsApp message from {sender_name}: {message_text}")
+
+    return jsonify({"status": "ok"}), 200
+
+
+def send_whatsapp_message(phone_number: str, message_text: str) -> bool:
+    """Send a WhatsApp message via Meta API"""
+    if not WHATSAPP_API_TOKEN or not WHATSAPP_PHONE_ID:
+        print("❌ WhatsApp API not configured")
+        return False
+
+    url = f"https://graph.instagram.com/v18.0/{WHATSAPP_PHONE_ID}/messages"
+    headers = {"Authorization": f"Bearer {WHATSAPP_API_TOKEN}"}
+
+    # التأكد من أن رقم الهاتف بصيغة صحيحة (20 لمصر، 966 للسعودية، إلخ)
+    if not phone_number.startswith("+"):
+        phone_number = f"+{phone_number}"
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": phone_number,
+        "type": "text",
+        "text": {"body": message_text}
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        if response.status_code == 200:
+            print(f"✅ WhatsApp message sent to {phone_number}")
+            return True
+        else:
+            print(f"❌ WhatsApp error: {response.text}")
+            return False
+    except Exception as e:
+        print(f"❌ WhatsApp exception: {str(e)}")
+        return False
+
+
+@app.route("/whatsapp/send", methods=["POST"])
+def whatsapp_send():
+    """Admin endpoint to send WhatsApp message (requires ADMIN_TOKEN)"""
+    if ADMIN_TOKEN and request.headers.get("X-Admin-Token") != ADMIN_TOKEN:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.json
+    phone = data.get("phone", "")
+    message = data.get("message", "")
+
+    if not phone or not message:
+        return jsonify({"error": "Missing phone or message"}), 400
+
+    success = send_whatsapp_message(phone, message)
+    return jsonify({"success": success}), 200 if success else 500
+
+
+# ========================================
+# Facebook Comments Improvements
+# ========================================
+@app.route("/facebook/comments", methods=["GET"])
+def facebook_comments_verify():
+    """Verify Facebook Webhook"""
+    mode = request.args.get("hub.mode")
+    token = request.args.get("hub.verify_token")
+    challenge = request.args.get("hub.challenge")
+
+    if mode == "subscribe" and token == VERIFY_TOKEN:
+        return challenge, 200
+    return "Forbidden", 403
+
+
+@app.route("/facebook/comments", methods=["POST"])
+def facebook_comments_webhook():
+    """Receive and store Facebook comments"""
+    data = request.json
+
+    if not data.get("entry"):
+        return jsonify({"status": "ok"}), 200
+
+    for entry in data.get("entry", []):
+        for change in entry.get("changes", []):
+            field = change.get("field")
+            if field in ["feed", "comments", "mention"]:
+                value = change.get("value", {})
+
+                if value.get("verb") != "add":
+                    continue
+
+                if value.get("item") == "comment":
+                    comment_id = value.get("comment_id")
+                    post_id = value.get("post_id")
+                    message = value.get("message", "")
+                    sender_id = value.get("from", {}).get("id")
+                    sender_name = value.get("from", {}).get("name", "Unknown")
+
+                    # Store in DB
+                    conn = get_db()
+                    cur = conn.cursor()
+                    cur.execute(
+                        """
+                        INSERT INTO comments (comment_id, post_id, sender_id, sender_name, comment_text, received_at, status)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (comment_id, post_id, sender_id, sender_name, message, datetime.utcnow().isoformat(), "pending")
+                    )
+                    conn.commit()
+                    conn.close()
+
+                    print(f"✅ Facebook comment from {sender_name}: {message}")
+
+    return jsonify({"status": "ok"}), 200
+
+
+def reply_to_facebook_comment(comment_id: str, reply_text: str) -> bool:
+    """Reply to a Facebook comment"""
+    if not PAGE_ACCESS_TOKEN:
+        return False
+
+    url = f"https://graph.facebook.com/v18.0/{comment_id}/comments"
+    params = {"access_token": PAGE_ACCESS_TOKEN}
+    data = {"message": reply_text}
+
+    try:
+        response = requests.post(url, params=params, json=data, timeout=10)
+        if response.status_code == 200:
+            # تحديث DB
+            conn = get_db()
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE comments SET reply_text = ?, replied_at = ?, status = ? WHERE comment_id = ?",
+                (reply_text, datetime.utcnow().isoformat(), "replied", comment_id)
+            )
+            conn.commit()
+            conn.close()
+            return True
+        return False
+    except Exception as e:
+        print(f"❌ Facebook reply error: {str(e)}")
+        return False
+
+
+@app.route("/facebook/comments/reply", methods=["POST"])
+def facebook_comment_reply():
+    """Admin endpoint to reply to a Facebook comment"""
+    if ADMIN_TOKEN and request.headers.get("X-Admin-Token") != ADMIN_TOKEN:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.json
+    comment_id = data.get("comment_id", "")
+    reply = data.get("reply", "")
+
+    if not comment_id or not reply:
+        return jsonify({"error": "Missing comment_id or reply"}), 400
+
+    success = reply_to_facebook_comment(comment_id, reply)
+    return jsonify({"success": success}), 200 if success else 500
+
+
+@app.route("/messages/list", methods=["GET"])
+def get_messages_list():
+    """Get all pending messages (WhatsApp + Facebook comments)"""
+    if ADMIN_TOKEN and request.headers.get("X-Admin-Token") != ADMIN_TOKEN:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    # الرسائل
+    cur.execute("SELECT id, platform, sender_name, message_text, received_at, status FROM messages ORDER BY received_at DESC LIMIT 100")
+    messages = [
+        {
+            "id": row[0],
+            "type": "message",
+            "platform": row[1],
+            "sender": row[2],
+            "content": row[3],
+            "received_at": row[4],
+            "status": row[5]
+        }
+        for row in cur.fetchall()
+    ]
+
+    # التعليقات
+    cur.execute("SELECT id, sender_name, comment_text, received_at, status FROM comments ORDER BY received_at DESC LIMIT 100")
+    comments = [
+        {
+            "id": row[0],
+            "type": "comment",
+            "platform": "facebook",
+            "sender": row[1],
+            "content": row[2],
+            "received_at": row[3],
+            "status": row[4]
+        }
+        for row in cur.fetchall()
+    ]
+
+    conn.close()
+
+    # دمج الرسائل والتعليقات وترتيبها حسب الوقت
+    all_items = sorted(messages + comments, key=lambda x: x.get("received_at", ""), reverse=True)
+
+    return jsonify({"items": all_items}), 200
 
 
 if __name__ == "__main__":

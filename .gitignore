@@ -6,6 +6,8 @@ __pycache__/
 # Environment variables
 .env
 .env.local
+*.env
+academy-manager.env
 
 # Virtual environments
 venv/
@@ -24,6 +26,9 @@ Thumbs.db
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Credentials (never commit)
+october-crm-*.json
 
 # Logs
 *.log

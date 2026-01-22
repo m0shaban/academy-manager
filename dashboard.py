@@ -28,6 +28,24 @@ def _post_to_facebook(caption: str, image_url: Optional[str]) -> Tuple[bool, str
 
     if image_url:
         try:
+            img_resp = requests.get(image_url, timeout=30)
+            img_resp.raise_for_status()
+            content_type = img_resp.headers.get("content-type", "image/jpeg")
+            files = {"source": ("image", img_resp.content, content_type)}
+            data = {"caption": caption}
+            r = requests.post(
+                "https://graph.facebook.com/v18.0/me/photos",
+                params=params,
+                data=data,
+                files=files,
+                timeout=45,
+            )
+            if r.status_code == 200:
+                return True, "ok"
+        except Exception:
+            pass
+
+        try:
             url = "https://graph.facebook.com/v18.0/me/photos"
             data = {"url": image_url, "caption": caption}
             r = requests.post(url, params=params, json=data, timeout=30)
@@ -50,6 +68,10 @@ def _post_to_facebook(caption: str, image_url: Optional[str]) -> Tuple[bool, str
 
 st.title("🗂️ Buffer CMS (Google Sheets)")
 st.caption("مراجعة + تعديل + اعتماد المنشورات قبل النشر")
+st.info(
+    "أوامر تيليجرام للأدمن: /queue, /post <row>, /delete <row>, /caption <row> <text>, /status",
+    icon="💬",
+)
 
 conn = st.connection("gsheets", type=GoogleSheetsConnection)
 

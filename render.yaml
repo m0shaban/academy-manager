@@ -39,3 +39,7 @@ services:
         sync: false
       - key: ACTIVE_HOURS
         sync: false
+      - key: FB_REPLY_COMMENTS
+        sync: false
+      - key: FB_REPLY_MESSAGES
+        sync: false

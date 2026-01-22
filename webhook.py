@@ -37,6 +37,10 @@ VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "academy_webhook_2026")
 CRON_SECRET = os.environ.get("CRON_SECRET", "").strip()
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")  # حماية احترافية لتوليد الأكواد (Header)
 
+# Facebook reply toggles
+FB_REPLY_COMMENTS = os.environ.get("FB_REPLY_COMMENTS", "1").strip().lower() in {"1", "true", "yes"}
+FB_REPLY_MESSAGES = os.environ.get("FB_REPLY_MESSAGES", "1").strip().lower() in {"1", "true", "yes"}
+
 # Google Sheets CMS
 GOOGLE_SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "").strip()
 GOOGLE_SHEET_WORKSHEET = os.environ.get("GOOGLE_SHEET_WORKSHEET", "Buffer").strip() or "Buffer"
@@ -357,6 +361,98 @@ def _telegram_send_message(chat_id: int, text: str) -> None:
         )
     except Exception:
         pass
+
+
+def _telegram_admin_help() -> str:
+    return (
+        "لوحة تيليجرام (أوامر الأدمن):\n"
+        "/queue - عرض آخر 10 منشورات مجدولة\n"
+        "/post <row> - نشر فوري لصف محدد\n"
+        "/delete <row> - حذف صف\n"
+        "/caption <row> <text> - تعديل الكابشن\n"
+        "/status - حالة الطابور\n"
+    )
+
+
+def _telegram_handle_admin_command(chat_id: int, text: str) -> None:
+    cmd = (text or "").strip()
+    if not cmd:
+        return
+
+    if cmd.startswith("/help"):
+        _telegram_send_message(chat_id, _telegram_admin_help())
+        return
+
+    if cmd.startswith("/status"):
+        ws, _header = _get_sheet()
+        rows = list_rows(ws)
+        pending = [r for r in rows if str(r.get("Status", "")).strip().lower() == "scheduled"]
+        _telegram_send_message(chat_id, f"Scheduled: {len(pending)}")
+        return
+
+    if cmd.startswith("/queue"):
+        ws, _header = _get_sheet()
+        rows = list_rows(ws)
+        pending = [r for r in rows if str(r.get("Status", "")).strip().lower() == "scheduled"]
+        pending.sort(key=lambda r: str(r.get("Scheduled_Time") or ""))
+        if not pending:
+            _telegram_send_message(chat_id, "لا توجد منشورات مجدولة حالياً.")
+            return
+        lines = []
+        for r in pending[:10]:
+            row_no = int(r.get("_row_number") or 0)
+            sched = str(r.get("Scheduled_Time") or "").strip()
+            cap = str(r.get("AI_Caption") or "").strip().replace("\n", " ")
+            if len(cap) > 60:
+                cap = cap[:57] + "..."
+            lines.append(f"#{row_no} • {sched}\n{cap}")
+        _telegram_send_message(chat_id, "\n\n".join(lines))
+        return
+
+    if cmd.startswith("/post "):
+        parts = cmd.split(maxsplit=1)
+        if len(parts) < 2 or not parts[1].strip().isdigit():
+            _telegram_send_message(chat_id, "استخدم: /post <row>")
+            return
+        row_number = int(parts[1].strip())
+        ws, header = _get_sheet()
+        values = ws.row_values(row_number)
+        item = {header[i]: (values[i] if i < len(values) else "") for i in range(len(header))}
+        caption = str(item.get("AI_Caption") or "").strip()
+        image_url = str(item.get("Image_URL") or "").strip() or None
+        ok, err = _post_to_facebook_page(caption, image_url)
+        if ok:
+            update_fields(ws, row_number, header, {"Status": "Posted"})
+            _telegram_send_message(chat_id, f"✅ Posted row {row_number}")
+        else:
+            update_fields(ws, row_number, header, {"Status": "Failed"})
+            _telegram_send_message(chat_id, f"❌ Failed: {err}")
+        return
+
+    if cmd.startswith("/delete "):
+        parts = cmd.split(maxsplit=1)
+        if len(parts) < 2 or not parts[1].strip().isdigit():
+            _telegram_send_message(chat_id, "استخدم: /delete <row>")
+            return
+        row_number = int(parts[1].strip())
+        ws, _header = _get_sheet()
+        ws.delete_rows(row_number)
+        _telegram_send_message(chat_id, f"🗑️ Deleted row {row_number}")
+        return
+
+    if cmd.startswith("/caption "):
+        parts = cmd.split(maxsplit=2)
+        if len(parts) < 3 or not parts[1].strip().isdigit():
+            _telegram_send_message(chat_id, "استخدم: /caption <row> <text>")
+            return
+        row_number = int(parts[1].strip())
+        new_caption = parts[2].strip()
+        ws, header = _get_sheet()
+        update_fields(ws, row_number, header, {"AI_Caption": new_caption})
+        _telegram_send_message(chat_id, f"✅ Updated caption for row {row_number}")
+        return
+
+    _telegram_send_message(chat_id, "أمر غير معروف. اكتب /help")
 
 
 def _telegram_download_file(file_id: str) -> bytes:
@@ -806,6 +902,24 @@ def _post_to_facebook_page(message: str, image_url: Optional[str]) -> Tuple[bool
 
     if image_url:
         try:
+            img_resp = requests.get(image_url, timeout=30)
+            img_resp.raise_for_status()
+            content_type = img_resp.headers.get("content-type", "image/jpeg")
+            files = {"source": ("image", img_resp.content, content_type)}
+            data = {"caption": message}
+            r = requests.post(
+                "https://graph.facebook.com/v18.0/me/photos",
+                params=params,
+                data=data,
+                files=files,
+                timeout=45,
+            )
+            if r.status_code == 200:
+                return True, "ok"
+        except Exception:
+            pass
+
+        try:
             url = "https://graph.facebook.com/v18.0/me/photos"
             data = {"url": image_url, "caption": message}
             r = requests.post(url, params=params, json=data, timeout=30)
@@ -1206,10 +1320,18 @@ def telegram_webhook():
             _telegram_send_message(int(chat_id), "غير مسموح. هذا البوت للأدمن فقط.")
         return jsonify({"ok": True})
 
+    text = str(message.get("text") or "").strip()
+    if text and TELEGRAM_ADMIN_ID and from_id == TELEGRAM_ADMIN_ID:
+        try:
+            _telegram_handle_admin_command(int(chat_id), text)
+        except Exception as e:
+            _telegram_send_message(int(chat_id), f"❌ Error: {str(e)}")
+        return jsonify({"ok": True})
+
     photos = message.get("photo") or []
     if not photos:
         if chat_id:
-            _telegram_send_message(int(chat_id), "ابعت صورة فقط.")
+            _telegram_send_message(int(chat_id), "ابعت صورة فقط أو اكتب /help للأوامر.")
         return jsonify({"ok": True})
 
     best = photos[-1]
@@ -1346,9 +1468,16 @@ def handle_webhook():
 
     if data.get("object") == "page":
         for entry in data.get("entry", []):
+            page_id = str(entry.get("id") or "")
             # Handle Messenger Messages
             for messaging in entry.get("messaging", []):
-                sender_id = messaging["sender"]["id"]
+                sender_id = str(messaging.get("sender", {}).get("id") or "")
+
+                if not FB_REPLY_MESSAGES:
+                    continue
+
+                if page_id and sender_id == page_id:
+                    continue
 
                 if "message" in messaging and "text" in messaging["message"]:
                     message_text = messaging["message"]["text"]
@@ -1363,6 +1492,8 @@ def handle_webhook():
             # Handle Comments
             for change in entry.get("changes", []):
                 if change.get("field") == "feed":
+                    if not FB_REPLY_COMMENTS:
+                        continue
                     value = change.get("value", {})
 
                     # Only reply to NEW comments (add)
@@ -1372,7 +1503,10 @@ def handle_webhook():
                     if value.get("item") == "comment":
                         comment_id = value.get("comment_id")
                         message = value.get("message", "")
-                        sender_id = value.get("from", {}).get("id")
+                        sender_id = str(value.get("from", {}).get("id") or "")
+
+                        if page_id and sender_id == page_id:
+                            continue
 
                         # Print debug info
                         print(f"DEBUG: Processing comment from {sender_id}: {message}")

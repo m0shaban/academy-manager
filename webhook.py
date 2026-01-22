@@ -1,14 +1,31 @@
 from flask import Flask, request, jsonify, Response
+import base64
 import os
-import sqlite3
 import random
-from datetime import datetime, timedelta
+import sqlite3
+import urllib.parse
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional, Tuple
 
 from groq import Groq
 import requests
 import feedparser
 from bs4 import BeautifulSoup
 import pytz
+
+from gsheets_cms import (
+    SheetConfig,
+    append_row,
+    ensure_headers,
+    find_due_scheduled,
+    has_scheduled_within,
+    list_rows,
+    load_service_account_info_from_env,
+    make_gspread_client,
+    open_worksheet,
+    update_fields,
+    utc_now_iso,
+)
 
 app = Flask(__name__)
 
@@ -19,6 +36,29 @@ VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "academy_webhook_2026")
 # IMPORTANT: set CRON_SECRET in your hosting provider (Render env var). No insecure default.
 CRON_SECRET = os.environ.get("CRON_SECRET", "").strip()
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")  # حماية احترافية لتوليد الأكواد (Header)
+
+# Google Sheets CMS
+GOOGLE_SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "").strip()
+GOOGLE_SHEET_WORKSHEET = os.environ.get("GOOGLE_SHEET_WORKSHEET", "Buffer").strip() or "Buffer"
+
+# Telegram Webhook Uploader (single web server)
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+TELEGRAM_ADMIN_ID = int(os.environ.get("TELEGRAM_ADMIN_ID", "0") or "0")
+TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "").strip()
+IMGBB_API_KEY = os.environ.get("IMGBB_API_KEY", "").strip()
+
+BUFFER_MINUTES = int(os.environ.get("BUFFER_MINUTES", "30") or "30")
+PREFILL_HOURS = int(os.environ.get("PREFILL_HOURS", "6") or "6")
+
+ACTIVE_HOURS_RAW = os.environ.get("ACTIVE_HOURS", "").strip()
+if ACTIVE_HOURS_RAW:
+    ACTIVE_HOURS = [int(x) for x in ACTIVE_HOURS_RAW.split(",") if x.strip().isdigit()]
+else:
+    ACTIVE_HOURS = []
+
+_GS_CLIENT = None
+_GS_WS = None
+_GS_HEADER = None
 
 # بسيط ومفيد ضد التخمين (in-memory). مناسب لـ Render single instance.
 _GEN_FAILS = {}
@@ -129,6 +169,242 @@ def landing_page():
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "service": "academy-webhook"})
+
+
+@app.route("/self-test", methods=["GET"])
+def self_test():
+    """Safe smoke test (no posting).
+
+    Protected via X-Admin-Token (if ADMIN_TOKEN is set).
+    Checks env wiring + connectivity to Google Sheets / Telegram / Facebook.
+    """
+    auth = _require_admin()
+    if auth:
+        return jsonify(auth[0]), auth[1]
+
+    results: Dict[str, Any] = {"ok": True, "checks": {}}
+
+    def _add(name: str, ok: bool, detail: str = ""):
+        results["checks"][name] = {"ok": ok, "detail": detail}
+        if not ok:
+            results["ok"] = False
+
+    # --- Env presence (no secrets returned) ---
+    _add("env.ADMIN_TOKEN", bool(ADMIN_TOKEN), "set" if ADMIN_TOKEN else "missing")
+    _add("env.CRON_SECRET", bool(CRON_SECRET), "set" if CRON_SECRET else "missing")
+    _add("env.VERIFY_TOKEN", bool(VERIFY_TOKEN), "set" if VERIFY_TOKEN else "missing")
+    _add("env.GROQ_API_KEY_4", bool(GROQ_API_KEY), "set" if GROQ_API_KEY else "missing")
+    _add("env.PAGE_ACCESS_TOKEN", bool(PAGE_ACCESS_TOKEN), "set" if PAGE_ACCESS_TOKEN else "missing")
+    _add("env.GOOGLE_SHEET_ID", bool(GOOGLE_SHEET_ID), "set" if GOOGLE_SHEET_ID else "missing")
+    _add(
+        "env.GOOGLE_SERVICE_ACCOUNT",
+        bool(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE")),
+        "set" if (os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE")) else "missing",
+    )
+    if os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE"):
+        fp = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE", "")
+        _add("file.GOOGLE_SERVICE_ACCOUNT_FILE", os.path.exists(fp), "exists" if os.path.exists(fp) else "missing")
+
+    _add("env.TELEGRAM_BOT_TOKEN", bool(TELEGRAM_BOT_TOKEN), "set" if TELEGRAM_BOT_TOKEN else "missing")
+    _add("env.TELEGRAM_ADMIN_ID", bool(TELEGRAM_ADMIN_ID), "set" if TELEGRAM_ADMIN_ID else "missing")
+    _add(
+        "env.TELEGRAM_WEBHOOK_SECRET",
+        bool(TELEGRAM_WEBHOOK_SECRET),
+        "set" if TELEGRAM_WEBHOOK_SECRET else "missing",
+    )
+    _add("env.IMGBB_API_KEY", bool(IMGBB_API_KEY), "set" if IMGBB_API_KEY else "missing")
+
+    # --- Google Sheets connectivity (read/ensure headers only) ---
+    try:
+        if GOOGLE_SHEET_ID:
+            ws, header = _get_sheet()
+            _add("sheets.connect", True, f"worksheet={ws.title}")
+            _add("sheets.headers", bool(header), f"columns={len(header)}")
+        else:
+            _add("sheets.connect", False, "GOOGLE_SHEET_ID missing")
+    except Exception as e:
+        msg = str(e).strip() or repr(e)
+        _add("sheets.connect", False, f"{type(e).__name__}: {msg}")
+
+    # --- Telegram connectivity (getMe) ---
+    try:
+        if TELEGRAM_BOT_TOKEN:
+            r = requests.get(_telegram_api_url("getMe"), timeout=15)
+            data = r.json() if r.content else {}
+            _add("telegram.getMe", bool(data.get("ok")), "ok" if data.get("ok") else str(data))
+
+            r2 = requests.get(_telegram_api_url("getWebhookInfo"), timeout=15)
+            info = r2.json() if r2.content else {}
+            url = ((info.get("result") or {}) if isinstance(info, dict) else {}).get("url")
+            if info.get("ok") and url:
+                _add("telegram.webhookInfo", True, str(url))
+            else:
+                _add("telegram.webhookInfo", False, str(info))
+        else:
+            _add("telegram.getMe", False, "TELEGRAM_BOT_TOKEN missing")
+    except Exception as e:
+        _add("telegram.getMe", False, str(e))
+
+    # --- Facebook connectivity (read-only) ---
+    try:
+        if PAGE_ACCESS_TOKEN:
+            r = requests.get(
+                "https://graph.facebook.com/v18.0/me",
+                params={"fields": "id,name", "access_token": PAGE_ACCESS_TOKEN},
+                timeout=15,
+            )
+            data = r.json() if r.content else {}
+            _add("facebook.me", "id" in data, "ok" if "id" in data else str(data))
+        else:
+            _add("facebook.me", False, "PAGE_ACCESS_TOKEN missing")
+    except Exception as e:
+        _add("facebook.me", False, str(e))
+
+    return jsonify(results), (200 if results["ok"] else 207)
+
+
+def _require_admin() -> Optional[Tuple[Dict[str, Any], int]]:
+    if ADMIN_TOKEN and request.headers.get("X-Admin-Token") != ADMIN_TOKEN:
+        return {"error": "Unauthorized"}, 401
+    return None
+
+
+def _get_sheet():
+    global _GS_CLIENT, _GS_WS, _GS_HEADER
+
+    if not GOOGLE_SHEET_ID:
+        raise RuntimeError("GOOGLE_SHEET_ID not configured")
+
+    if _GS_WS is not None and _GS_HEADER is not None:
+        return _GS_WS, _GS_HEADER
+
+    svc = load_service_account_info_from_env()
+    if not svc:
+        raise RuntimeError("GOOGLE_SERVICE_ACCOUNT_JSON/FILE not configured")
+
+    if _GS_CLIENT is None:
+        _GS_CLIENT = make_gspread_client(svc)
+
+    cfg = SheetConfig(sheet_id=GOOGLE_SHEET_ID, worksheet=GOOGLE_SHEET_WORKSHEET)
+    ws = open_worksheet(_GS_CLIENT, cfg)
+    header = ensure_headers(ws)
+    _GS_WS, _GS_HEADER = ws, header
+    return ws, header
+
+
+def _pollinations_url(prompt_en: str) -> str:
+    encoded = urllib.parse.quote(str(prompt_en or "").strip(), safe="")
+    return f"https://image.pollinations.ai/prompt/{encoded}"
+
+
+def _generate_image_prompt_en() -> str:
+    if not client:
+        return "Cinematic photo of kids martial arts training in Cairo, golden hour, energetic, high detail"
+    prompt = (
+        "Write ONE short English image prompt (8-18 words) for a cinematic sports academy scene. "
+        "Safe-for-work. Avoid violence and copyrighted characters."
+    )
+    res = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=80,
+        temperature=0.9,
+    )
+    return (res.choices[0].message.content or "").strip().strip('"')
+
+
+def _generate_ar_caption_from_prompt(prompt_en: str) -> str:
+    if not client:
+        return "🥋 تدريب النهارده نار! جاهزين تبدأوا؟ احجز مكانك دلوقتي 💪📞"
+    prompt = (
+        "اكتب كابشن فيسبوك عربي مصري (عامية) عن صورة تدريب في أكاديمية رياضية. "
+        "الكابشن 2-4 سطور، تحفيزي، وفيه CTA للحجز، وإيموجيز بسيطة. "
+        f"وصف الصورة (بالإنجليزية): {prompt_en}"
+    )
+    res = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=250,
+        temperature=0.85,
+    )
+    return (res.choices[0].message.content or "").strip()
+
+
+def _next_available_slot(now_utc: datetime) -> datetime:
+    candidate = now_utc + timedelta(minutes=max(BUFFER_MINUTES, 0))
+    if not ACTIVE_HOURS:
+        return candidate
+
+    for _ in range(0, 72):
+        if candidate.hour in ACTIVE_HOURS:
+            return candidate
+        candidate = (candidate + timedelta(hours=1)).replace(minute=0, second=0)
+    return now_utc + timedelta(minutes=max(BUFFER_MINUTES, 0))
+
+
+def _telegram_api_url(method: str) -> str:
+    return f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/{method}"
+
+
+def _telegram_send_message(chat_id: int, text: str) -> None:
+    if not TELEGRAM_BOT_TOKEN:
+        return
+    try:
+        requests.post(
+            _telegram_api_url("sendMessage"),
+            json={"chat_id": chat_id, "text": text},
+            timeout=15,
+        )
+    except Exception:
+        pass
+
+
+def _telegram_download_file(file_id: str) -> bytes:
+    r = requests.get(_telegram_api_url("getFile"), params={"file_id": file_id}, timeout=20)
+    payload = r.json() if r.content else {}
+    if not payload.get("ok"):
+        raise RuntimeError("Telegram getFile failed")
+    file_path = (payload.get("result") or {}).get("file_path")
+    if not file_path:
+        raise RuntimeError("Telegram file_path missing")
+    file_url = f"https://api.telegram.org/file/bot{TELEGRAM_BOT_TOKEN}/{file_path}"
+    img = requests.get(file_url, timeout=60)
+    img.raise_for_status()
+    return img.content
+
+
+def _imgbb_upload(image_bytes: bytes) -> str:
+    if not IMGBB_API_KEY:
+        raise RuntimeError("IMGBB_API_KEY not set")
+    b64 = base64.b64encode(image_bytes).decode("utf-8")
+    resp = requests.post(
+        "https://api.imgbb.com/1/upload",
+        data={"key": IMGBB_API_KEY, "image": b64},
+        timeout=60,
+    )
+    resp.raise_for_status()
+    data = resp.json() if resp.content else {}
+    if not data.get("success"):
+        raise RuntimeError("ImgBB upload failed")
+    return str((data.get("data") or {}).get("url") or "").strip()
+
+
+def _generate_caption_for_image_url(image_url: str) -> str:
+    if not client:
+        return "🥋 جاهزين للتمرين؟ احجز مكانك دلوقتي! 📞"
+    prompt = (
+        "اكتب كابشن فيسبوك عربي مصري (عامية) عن صورة تدريب في أكاديمية رياضية. "
+        "الكابشن 2-4 سطور، تحفيزي، وفيه CTA للحجز، وإيموجيز مناسبة. "
+        "لا تذكر أنك لم ترَ الصورة. "
+        f"رابط الصورة (للسياق فقط): {image_url}"
+    )
+    res = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=250,
+        temperature=0.85,
+    )
+    return (res.choices[0].message.content or "").strip()
 
 
 # Initialize Groq
@@ -522,6 +798,34 @@ def publish_to_facebook(message, image_url=None):
         return f"Error publishing: {e}"
 
 
+def _post_to_facebook_page(message: str, image_url: Optional[str]) -> Tuple[bool, str]:
+    if not PAGE_ACCESS_TOKEN:
+        return False, "PAGE_ACCESS_TOKEN not set"
+
+    params = {"access_token": PAGE_ACCESS_TOKEN}
+
+    if image_url:
+        try:
+            url = "https://graph.facebook.com/v18.0/me/photos"
+            data = {"url": image_url, "caption": message}
+            r = requests.post(url, params=params, json=data, timeout=30)
+            if r.status_code == 200:
+                return True, "ok"
+        except Exception:
+            pass
+
+    try:
+        url = "https://graph.facebook.com/v18.0/me/feed"
+        data = {"message": message}
+        if image_url:
+            data["link"] = image_url
+        r = requests.post(url, params=params, json=data, timeout=30)
+        r.raise_for_status()
+        return True, "ok"
+    except Exception as e:
+        return False, str(e)
+
+
 def generate_response(message):
     """Generate AI response using Groq"""
     if not client:
@@ -803,6 +1107,219 @@ def auto_scheduler():
         )
 
     return "Failed to generate content", 500
+
+
+@app.route("/publisher-tick", methods=["GET"])
+def publisher_tick():
+    """Minute-level publisher tick.
+
+    - Publishes due scheduled items from Google Sheets.
+    - If queue is empty and no scheduled items in next PREFILL_HOURS, pre-fills one AI-generated item.
+    """
+    if not CRON_SECRET:
+        return "CRON_SECRET is not configured", 500
+    secret = request.args.get("secret")
+    if secret != CRON_SECRET:
+        return "Unauthorized", 401
+
+    dry_run = str(request.args.get("dry_run", "")).strip().lower() in {"1", "true", "yes"}
+
+    if not GOOGLE_SHEET_ID:
+        return jsonify({"enabled": False, "error": "GOOGLE_SHEET_ID not configured"}), 200
+
+    try:
+        ws, header = _get_sheet()
+        rows = list_rows(ws)
+
+        # 1) Publish due
+        due = find_due_scheduled(rows)
+        if due:
+            item = due[0]
+            row_number = int(item.get("_row_number") or 0)
+            caption = str(item.get("AI_Caption") or "").strip()
+            image_url = str(item.get("Image_URL") or "").strip() or None
+
+            if dry_run:
+                update_fields(ws, row_number, header, {"Status": "Posted"})
+                return jsonify({"enabled": True, "action": "dry_run_posted", "row": row_number}), 200
+
+            ok, err = _post_to_facebook_page(caption, image_url)
+            if ok:
+                update_fields(ws, row_number, header, {"Status": "Posted"})
+                return jsonify({"enabled": True, "action": "posted", "row": row_number}), 200
+            update_fields(ws, row_number, header, {"Status": "Failed"})
+            return (
+                jsonify({"enabled": True, "action": "failed", "row": row_number, "error": err}),
+                200,
+            )
+
+        # 2) Prefill if needed
+        if PREFILL_HOURS > 0:
+            now = datetime.now(timezone.utc).replace(microsecond=0)
+            window_end = now + timedelta(hours=max(PREFILL_HOURS, 1))
+            if not has_scheduled_within(rows, start=now, end=window_end):
+                prompt_en = _generate_image_prompt_en()
+                img_url = _pollinations_url(prompt_en)
+                caption_ar = _generate_ar_caption_from_prompt(prompt_en)
+                scheduled_time = _next_available_slot(now)
+                append_row(
+                    ws,
+                    header,
+                    {
+                        "Timestamp": utc_now_iso(),
+                        "Image_URL": img_url,
+                        "AI_Caption": caption_ar,
+                        "Status": "Scheduled",
+                        "Scheduled_Time": scheduled_time.isoformat(),
+                        "Source": "AI_Generated",
+                    },
+                )
+                return jsonify({"enabled": True, "action": "prefilled"}), 200
+
+        return jsonify({"enabled": True, "action": "noop"}), 200
+    except Exception as e:
+        return jsonify({"enabled": True, "action": "error", "error": str(e)}), 500
+
+
+@app.route("/telegram/webhook", methods=["POST"])
+def telegram_webhook():
+    """Telegram webhook uploader (admin-only)."""
+    secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+    if TELEGRAM_WEBHOOK_SECRET and secret != TELEGRAM_WEBHOOK_SECRET:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+
+    if not TELEGRAM_BOT_TOKEN:
+        return jsonify({"ok": False, "error": "TELEGRAM_BOT_TOKEN not configured"}), 500
+
+    if not GOOGLE_SHEET_ID:
+        return jsonify({"ok": False, "error": "GOOGLE_SHEET_ID not configured"}), 500
+
+    update = request.get_json(silent=True) or {}
+    message = update.get("message") or update.get("edited_message") or {}
+    chat = message.get("chat") or {}
+    chat_id = chat.get("id")
+    from_user = message.get("from") or {}
+    from_id = from_user.get("id")
+
+    if TELEGRAM_ADMIN_ID and from_id != TELEGRAM_ADMIN_ID:
+        if chat_id:
+            _telegram_send_message(int(chat_id), "غير مسموح. هذا البوت للأدمن فقط.")
+        return jsonify({"ok": True})
+
+    photos = message.get("photo") or []
+    if not photos:
+        if chat_id:
+            _telegram_send_message(int(chat_id), "ابعت صورة فقط.")
+        return jsonify({"ok": True})
+
+    best = photos[-1]
+    file_id = best.get("file_id")
+    if not file_id:
+        return jsonify({"ok": True})
+
+    try:
+        image_bytes = _telegram_download_file(str(file_id))
+        image_url = _imgbb_upload(image_bytes)
+        caption = _generate_caption_for_image_url(image_url)
+
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        scheduled_time = now + timedelta(minutes=max(BUFFER_MINUTES, 0))
+
+        ws, header = _get_sheet()
+        append_row(
+            ws,
+            header,
+            {
+                "Timestamp": utc_now_iso(),
+                "Image_URL": image_url,
+                "AI_Caption": caption,
+                "Status": "Scheduled",
+                "Scheduled_Time": scheduled_time.isoformat(),
+                "Source": "User_Upload",
+            },
+        )
+
+        if chat_id:
+            _telegram_send_message(
+                int(chat_id),
+                f"✅ Saved to queue. Will post in {BUFFER_MINUTES} mins.\n⏰ {scheduled_time.isoformat()}",
+            )
+        return jsonify({"ok": True, "image_url": image_url}), 200
+    except Exception as e:
+        if chat_id:
+            _telegram_send_message(int(chat_id), f"❌ Error: {str(e)}")
+        return jsonify({"ok": True}), 200
+
+
+@app.route("/cms/pending", methods=["GET"])
+def cms_pending():
+    auth = _require_admin()
+    if auth:
+        return jsonify(auth[0]), auth[1]
+
+    ws, _header = _get_sheet()
+    rows = list_rows(ws)
+    pending = [r for r in rows if str(r.get("Status", "")).strip().lower() == "scheduled"]
+    pending.sort(key=lambda r: str(r.get("Scheduled_Time") or ""))
+    return jsonify({"items": pending}), 200
+
+
+@app.route("/cms/update-caption", methods=["POST"])
+def cms_update_caption():
+    auth = _require_admin()
+    if auth:
+        return jsonify(auth[0]), auth[1]
+
+    payload = request.get_json(silent=True) or {}
+    row_number = int(payload.get("row_number") or 0)
+    caption = str(payload.get("caption") or "")
+    if row_number < 2:
+        return jsonify({"error": "row_number required"}), 400
+
+    ws, header = _get_sheet()
+    update_fields(ws, row_number, header, {"AI_Caption": caption})
+    return jsonify({"ok": True}), 200
+
+
+@app.route("/cms/post-now", methods=["POST"])
+def cms_post_now():
+    auth = _require_admin()
+    if auth:
+        return jsonify(auth[0]), auth[1]
+
+    payload = request.get_json(silent=True) or {}
+    row_number = int(payload.get("row_number") or 0)
+    if row_number < 2:
+        return jsonify({"error": "row_number required"}), 400
+
+    ws, header = _get_sheet()
+    # Read row
+    values = ws.row_values(row_number)
+    item = {header[i]: (values[i] if i < len(values) else "") for i in range(len(header))}
+    caption = str(item.get("AI_Caption") or "").strip()
+    image_url = str(item.get("Image_URL") or "").strip() or None
+    ok, err = _post_to_facebook_page(caption, image_url)
+    if ok:
+        update_fields(ws, row_number, header, {"Status": "Posted"})
+        return jsonify({"ok": True}), 200
+    update_fields(ws, row_number, header, {"Status": "Failed"})
+    return jsonify({"ok": False, "error": err}), 500
+
+
+@app.route("/cms/delete", methods=["POST"])
+def cms_delete():
+    auth = _require_admin()
+    if auth:
+        return jsonify(auth[0]), auth[1]
+
+    payload = request.get_json(silent=True) or {}
+    row_number = int(payload.get("row_number") or 0)
+    if row_number < 2:
+        return jsonify({"error": "row_number required"}), 400
+
+    ws, _header = _get_sheet()
+    ws.delete_rows(row_number)
+    return jsonify({"ok": True}), 200
 
 
 @app.route("/webhook", methods=["GET"])

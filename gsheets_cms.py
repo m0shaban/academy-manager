@@ -92,7 +92,10 @@ def _with_backoff(fn, *, tries: int = 7, base_sleep: float = 0.6):
             last_exc = exc
             sleep = base_sleep * (2**attempt) + random.random() * 0.25
             time.sleep(min(sleep, 10.0))
-    raise SheetRateLimitError(str(last_exc))
+    if last_exc is None:
+        raise SheetRateLimitError("Unknown error")
+    msg = str(last_exc).strip() or repr(last_exc)
+    raise SheetRateLimitError(f"{type(last_exc).__name__}: {msg}")
 
 
 def open_worksheet(client: gspread.Client, cfg: SheetConfig) -> gspread.Worksheet:

@@ -79,6 +79,18 @@ _GS_HEADER = None
 
 _TELEGRAM_AUTH_UNTIL: Dict[int, datetime] = {}
 
+_CONTENT_TYPES = [
+    "education_tip",   # تعليمي
+    "marketing",       # تسويقي
+    "motivation",      # تحفيزي
+    "fun",             # خفيف/ترفيهي
+    "self_defense",    # دفاع عن النفس
+    "health_tip",      # صحة/تغذية
+    "kids_advice",     # أولياء الأمور
+    "training_drill",  # فني/تدريبي
+]
+_CONTENT_TYPE_INDEX = 0
+
 # بسيط ومفيد ضد التخمين (in-memory). مناسب لـ Render single instance.
 _GEN_FAILS = {}
 _GEN_BLOCKED_UNTIL = {}
@@ -878,9 +890,9 @@ ACADEMY_DATA = {
         "تايكوندو": ["بالاتفاق مع الكابتن"],
     },
     "pricing": {
-        "كاراتيه": "500 جنيه/شهر",
-        "كونغ فو": "500 جنيه/شهر",
-        "كيك بوكسينج": "500 جنيه/شهر",
+        "كاراتيه": "600 جنيه/شهر",
+        "كونغ فو": "600 جنيه/شهر",
+        "كيك بوكسينج": "600 جنيه/شهر",
         "جمباز": "600 جنيه/شهر",
         "تايكوندو": "600 جنيه/شهر",
         "ملاكمة": "600 جنيه/شهر",
@@ -1000,6 +1012,7 @@ SYSTEM_PROMPT_BASE = """أنت "كابتن عز غريب"، صانع محتوى 
 إرشادات أسلوبية:
 - قدّم نصائح واقعية ومختصرة عن اللياقة، المرونة، القوة، التغذية البسيطة، السلامة.
 - ركّز على رياضات الأكاديمية: كاراتيه، كونغ فو، كيك بوكسينج، جمباز، ملاكمة، تايكوندو.
+- ممنوع ذكر كرة القدم أو أي رياضة غير رياضات الأكاديمية.
 - أضف نقاط تعليمية عن الدفاع عن النفس والانضباط والثقة.
 - اختم بنداء لطيف للحجز أو التواصل (CTA) دون مبالغة.
 - خاطب الجميع بلغة عربية مصرية سهلة ومهذبة.
@@ -1035,20 +1048,10 @@ def extract_image_from_url(url):
 
 def fetch_content_idea():
     """Fetch an idea from RSS or generate a topic based on time of day"""
-    current_hour = get_cairo_time().hour
-
-    # تحديد نوع المنشور حسب الوقت
-    post_type = "general"
-    if 8 <= current_hour < 11:
-        post_type = "motivation_morning"  # صباح وتفاؤل
-    elif 11 <= current_hour < 14:
-        post_type = "health_tip"  # نصيحة في وسط اليوم
-    elif 14 <= current_hour < 17:
-        post_type = "kids_advice"  # نصيحة للأمهات والأطفال بعد المدرسة
-    elif 17 <= current_hour < 20:
-        post_type = "training_drill"  # وقت التمرين
-    elif 20 <= current_hour <= 23:
-        post_type = "academy_offer"  # عرض مباشر للحجز
+    # توزيع متساوٍ (Round-robin)
+    global _CONTENT_TYPE_INDEX
+    post_type = _CONTENT_TYPES[_CONTENT_TYPE_INDEX % len(_CONTENT_TYPES)]
+    _CONTENT_TYPE_INDEX += 1
 
     # تفضيل احضار محتوى خارجي للتعليق عليه (Curated Content)
     try:
@@ -1101,11 +1104,14 @@ def generate_social_post(idea):
         """
     else:
         topics = {
-            "motivation_morning": "بوست صباحي تحفيزي عن النشاط والبداية القوية.",
+            "education_tip": "معلومة تعليمية مبسطة عن رياضة من رياضات الأكاديمية وفايدتها.",
+            "marketing": "بوست تسويقي محترف يوضح قيمة التدريب ويدعو للحجز.",
+            "motivation": "بوست تحفيزي للاعبين وأولياء الأمور عن الانضباط والاستمرارية.",
+            "fun": "بوست خفيف ولطيف مرتبط بالتمرين والالتزام بدون مبالغة.",
+            "self_defense": "نصيحة دفاع عن النفس آمنة ومناسبة للأعمار المختلفة.",
             "health_tip": "نصيحة تغذية أو شرب مياه أو نوم للرياضيين.",
             "kids_advice": "نصيحة لأولياء الأمور عن التعامل مع طاقة الأطفال وتوجيهها للرياضة.",
             "training_drill": "معلومة فنية بسيطة عن الكاراتيه أو الجمباز أو الكونفو.",
-            "academy_offer": "بوست دعائي مباشر بس بأسلوب 'خايف على مصلحتك'.. الحق مكانك في عروض السنة الجديدة.",
         }
         topic_desc = topics.get(idea["category"], "نصيحة رياضية عامة")
 

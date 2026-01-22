@@ -78,15 +78,16 @@ _GS_WS = None
 _GS_HEADER = None
 
 _TELEGRAM_AUTH_UNTIL: Dict[int, datetime] = {}
+_PENDING_VIDEO: Dict[int, Dict[str, str]] = {}
 
 _CONTENT_TYPES = [
-    "education_tip",   # تعليمي
-    "marketing",       # تسويقي
-    "motivation",      # تحفيزي
-    "fun",             # خفيف/ترفيهي
-    "self_defense",    # دفاع عن النفس
-    "health_tip",      # صحة/تغذية
-    "kids_advice",     # أولياء الأمور
+    "education_tip",  # تعليمي
+    "marketing",  # تسويقي
+    "motivation",  # تحفيزي
+    "fun",  # خفيف/ترفيهي
+    "self_defense",  # دفاع عن النفس
+    "health_tip",  # صحة/تغذية
+    "kids_advice",  # أولياء الأمور
     "training_drill",  # فني/تدريبي
 ]
 _CONTENT_TYPE_INDEX = 0
@@ -396,11 +397,33 @@ def _generate_image_prompt_en() -> str:
     return (res.choices[0].message.content or "").strip().strip('"')
 
 
+def _generate_image_prompt_from_text(ar_text: str) -> str:
+    if not client:
+        return (
+            "Anime-style illustration of kids martial arts training in Cairo gym, "
+            "vibrant colors, clean lines, soft shading, no text, no watermark"
+        )
+    prompt = (
+        "Create ONE short English image prompt (12-20 words) that visually matches this Arabic post. "
+        "Anime/cartoon style, vibrant colors, clean lines, soft shading. "
+        "Mention one sport (karate, kung fu, kickboxing, gymnastics, boxing, taekwondo). "
+        "No text, no watermark."
+        f"\nPost (Arabic): {ar_text}"
+    )
+    res = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=80,
+        temperature=0.8,
+    )
+    return (res.choices[0].message.content or "").strip().strip('"')
+
+
 def _generate_ar_caption_from_prompt(prompt_en: str) -> str:
     if not client:
         return "🥋 تدريب النهارده نار! جاهزين تبدأوا؟ احجز مكانك دلوقتي 💪📞"
     prompt = (
-        "اكتب كابشن فيسبوك عربي مصري (عامية) لصانع محتوى رياضي محترف. "
+        "اكتب كابشن فيسبوك باللهجة المصرية الشيك (عامية مهذبة) لصانع محتوى رياضي محترف. "
         "الكابشن 3-5 سطور، معلومات مفيدة وقابلة للتطبيق، نصيحة تدريب أو صحة، "
         "تحفيز للّاعبين وأولياء الأمور، و CTA لطيف للحجز. "
         "اذكر واحدة من رياضات الأكاديمية (كاراتيه/كونغ فو/كيك بوكس/جمباز/ملاكمة/تايكوندو). "
@@ -473,6 +496,26 @@ def _telegram_send_message_with_markup(
         pass
 
 
+def _telegram_video_category_markup() -> dict:
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "كاراتيه", "callback_data": "vid_cat:karate"},
+                {"text": "كونغ فو", "callback_data": "vid_cat:kungfu"},
+                {"text": "كيك بوكس", "callback_data": "vid_cat:kickboxing"},
+            ],
+            [
+                {"text": "جمباز", "callback_data": "vid_cat:gymnastics"},
+                {"text": "ملاكمة", "callback_data": "vid_cat:boxing"},
+                {"text": "تايكوندو", "callback_data": "vid_cat:taekwondo"},
+            ],
+            [
+                {"text": "عام", "callback_data": "vid_cat:general"},
+            ],
+        ]
+    }
+
+
 def _telegram_send_photo(chat_id: int, image_url: str, caption: str = "") -> None:
     if not TELEGRAM_BOT_TOKEN:
         return
@@ -531,7 +574,6 @@ def _telegram_handle_admin_callback(chat_id: int, data: str) -> None:
     if data == "dash_help":
         _telegram_send_message(chat_id, _telegram_admin_help())
         return
-
     if data == "dash_status":
         ws, _header = _get_sheet()
         rows = list_rows(ws)
@@ -576,8 +618,9 @@ def _telegram_handle_admin_callback(chat_id: int, data: str) -> None:
 
     if data == "dash_ai_post":
         prompt_en = _generate_image_prompt_en()
-        img_url = _pollinations_url(prompt_en)
         caption_ar = _generate_ar_caption_from_prompt(prompt_en)
+        prompt_en = _generate_image_prompt_from_text(caption_ar)
+        img_url = _pollinations_url(prompt_en)
         ok, err = _post_to_facebook_page(caption_ar, img_url)
 
         try:
@@ -601,6 +644,47 @@ def _telegram_handle_admin_callback(chat_id: int, data: str) -> None:
             _telegram_send_message(chat_id, "✅ تم نشر محتوى وصورة AI الآن")
         else:
             _telegram_send_message(chat_id, f"❌ فشل النشر: {err}")
+        return
+
+    if data.startswith("vid_cat:"):
+        info = _PENDING_VIDEO.get(chat_id)
+        if not info:
+            _telegram_send_message(chat_id, "❌ مفيش فيديو مُعلّق.")
+            return
+        topic = data.split(":", 1)[1]
+        try:
+            video_bytes = _telegram_download_file(info["file_id"])
+            caption = _generate_caption_for_video_with_context(topic)
+            ok, err = _post_video_to_facebook_page(
+                caption,
+                video_bytes,
+                info.get("filename", "video.mp4"),
+                info.get("mime_type", "video/mp4"),
+            )
+
+            try:
+                ws, header = _get_sheet()
+                append_row(
+                    ws,
+                    header,
+                    {
+                        "Timestamp": utc_now_iso(),
+                        "Image_URL": "",
+                        "AI_Caption": caption,
+                        "Status": "Posted" if ok else "Failed",
+                        "Scheduled_Time": "",
+                        "Source": "User_Video",
+                    },
+                )
+            except Exception:
+                pass
+
+            if ok:
+                _telegram_send_message(chat_id, "✅ تم نشر الفيديو مع كابشن.")
+            else:
+                _telegram_send_message(chat_id, f"❌ فشل نشر الفيديو: {err}")
+        finally:
+            _PENDING_VIDEO.pop(chat_id, None)
         return
 
 
@@ -741,7 +825,7 @@ def _generate_caption_for_image_url(image_url: str) -> str:
     if not client:
         return "🥋 جاهزين للتمرين؟ احجز مكانك دلوقتي! 📞"
     prompt = (
-        "اكتب كابشن فيسبوك عربي مصري (عامية) لصانع محتوى رياضي محترف. "
+        "اكتب كابشن فيسبوك باللهجة المصرية الشيك (عامية مهذبة) لصانع محتوى رياضي محترف. "
         "الكابشن 3-5 سطور، معلومات مفيدة قابلة للتطبيق، نصيحة تدريب أو صحة، "
         "تحفيز للّاعبين وأولياء الأمور، و CTA لطيف للحجز. "
         "اذكر واحدة من رياضات الأكاديمية (كاراتيه/كونغ فو/كيك بوكس/جمباز/ملاكمة/تايكوندو). "
@@ -770,9 +854,53 @@ def _generate_caption_for_video() -> str:
     if not client:
         return "🎥 تمرين قوي ومفيد! احجز مكانك دلوقتي 💪📞"
     prompt = (
-        "اكتب كابشن فيسبوك عربي مصري (عامية) لفيديو تدريب رياضي في الأكاديمية. "
+        "اكتب كابشن فيسبوك باللهجة المصرية الشيك (عامية مهذبة) لفيديو تدريب رياضي في الأكاديمية. "
         "الكابشن 3-5 سطور، نصيحة تدريب أو صحة، تحفيز للّاعبين وأولياء الأمور، "
         "و CTA لطيف للحجز. اذكر رياضة من رياضات الأكاديمية."
+    )
+    res = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=250,
+        temperature=0.85,
+    )
+    return (res.choices[0].message.content or "").strip()
+
+
+def _generate_caption_for_video_with_context(topic: str) -> str:
+    if not client:
+        return "🎥 تمرين ممتع ومفيد! احجز مكانك دلوقتي 💪📞"
+    topic_map = {
+        "karate": "كاراتيه",
+        "kungfu": "كونغ فو",
+        "kickboxing": "كيك بوكسينج",
+        "gymnastics": "جمباز",
+        "boxing": "ملاكمة",
+        "taekwondo": "تايكوندو",
+        "general": "رياضة",
+    }
+    sport = topic_map.get(topic, "رياضة")
+    prompt = (
+        "اكتب كابشن فيسبوك باللهجة المصرية الشيك (عامية مهذبة) لفيديو تدريب رياضي في الأكاديمية. "
+        "الكابشن 3-5 سطور، نصيحة عملية، تحفيز للّاعبين وأولياء الأمور، و CTA لطيف للحجز. "
+        f"اذكر رياضة: {sport}."
+    )
+    res = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=250,
+        temperature=0.85,
+    )
+    return (res.choices[0].message.content or "").strip()
+
+
+def _generate_caption_for_video_from_text(text: str) -> str:
+    if not client:
+        return "🎥 تمرين ممتع ومفيد! احجز مكانك دلوقتي 💪📞"
+    prompt = (
+        "اكتب كابشن فيسبوك باللهجة المصرية الشيك (عامية مهذبة) لفيديو تدريب رياضي في الأكاديمية. "
+        "الكابشن 3-5 سطور، نصيحة عملية، تحفيز للّاعبين وأولياء الأمور، و CTA لطيف للحجز. "
+        f"وصف الفيديو: {text}"
     )
     res = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
@@ -1106,7 +1234,7 @@ def generate_social_post(idea):
         
         اكتب بوست فيسبوك تعلق فيه على الموضوع ده.
         1. ابدأ بجملة تشد الانتباه (Hook).
-        2. لخص الفكرة المهمة باختصار وبالعامية المصرية.
+        2. لخص الفكرة المهمة باختصار باللهجة المصرية الشيك.
         3. ضيف نصيحة إضافية من عندك "تكة الكابتن".
         4. (اختياري) لو مناسب، اربط الموضوع برياضة موجودة في الأكاديمية عندنا.
         5. لا تذكر الرابط، فقط علق على المحتوى.
@@ -1131,7 +1259,7 @@ def generate_social_post(idea):
         اكتب بوست فيسبوك عن: {topic_desc}
         
         الأسلوب:
-        - عامية مصرية.
+        - لهجة مصرية شيك (عامية مهذبة).
         - استخدم إيموجي مناسبة 🥊🥋💪.
         - خلي الكلام مقسم فقرات قصيرة (سهل القراءة).
         - اختم بـ Call to Action (سؤال للمتابعين، أو دعوة للتمرين).
@@ -1221,7 +1349,9 @@ def _post_to_facebook_page(message: str, image_url: Optional[str]) -> Tuple[bool
         return False, str(e)
 
 
-def _post_video_to_facebook_page(message: str, video_bytes: bytes, filename: str, mime_type: str) -> Tuple[bool, str]:
+def _post_video_to_facebook_page(
+    message: str, video_bytes: bytes, filename: str, mime_type: str
+) -> Tuple[bool, str]:
     if not PAGE_ACCESS_TOKEN:
         return False, "PAGE_ACCESS_TOKEN not set"
 
@@ -1598,8 +1728,9 @@ def publisher_tick():
             window_end = now + timedelta(hours=max(PREFILL_HOURS, 1))
             if not has_scheduled_within(rows, start=now, end=window_end):
                 prompt_en = _generate_image_prompt_en()
-                img_url = _pollinations_url(prompt_en)
                 caption_ar = _generate_ar_caption_from_prompt(prompt_en)
+                prompt_en = _generate_image_prompt_from_text(caption_ar)
+                img_url = _pollinations_url(prompt_en)
                 scheduled_time = _next_available_slot(now)
                 append_row(
                     ws,
@@ -1664,7 +1795,11 @@ def telegram_webhook():
     text = str(message.get("text") or "").strip()
 
     # Passphrase gate for uploads/content (available to any user)
-    if text and TELEGRAM_PUBLISH_PASSPHRASE and text.strip() == TELEGRAM_PUBLISH_PASSPHRASE:
+    if (
+        text
+        and TELEGRAM_PUBLISH_PASSPHRASE
+        and text.strip() == TELEGRAM_PUBLISH_PASSPHRASE
+    ):
         _telegram_authorize(int(chat_id))
         _telegram_send_message(
             int(chat_id), "✅ تم التفعيل لمدة ساعتين. ابعت المحتوى الآن."
@@ -1702,6 +1837,7 @@ def telegram_webhook():
         file_id = None
         filename = "video.mp4"
         mime_type = "video/mp4"
+        caption_text = str(message.get("caption") or "").strip()
 
         if video:
             file_id = video.get("file_id")
@@ -1716,36 +1852,52 @@ def telegram_webhook():
             _telegram_send_message(int(chat_id), "❌ لم أستطع قراءة الفيديو.")
             return jsonify({"ok": True})
 
-        try:
-            video_bytes = _telegram_download_file(str(file_id))
-            caption = _generate_caption_for_video()
-            ok, err = _post_video_to_facebook_page(caption, video_bytes, filename, mime_type)
-
+        # If caption provided, generate caption from it and post immediately
+        if caption_text:
             try:
-                ws, header = _get_sheet()
-                append_row(
-                    ws,
-                    header,
-                    {
-                        "Timestamp": utc_now_iso(),
-                        "Image_URL": "",
-                        "AI_Caption": caption,
-                        "Status": "Posted" if ok else "Failed",
-                        "Scheduled_Time": "",
-                        "Source": "User_Video",
-                    },
+                video_bytes = _telegram_download_file(str(file_id))
+                caption = _generate_caption_for_video_from_text(caption_text)
+                ok, err = _post_video_to_facebook_page(
+                    caption, video_bytes, filename, mime_type
                 )
-            except Exception:
-                pass
 
-            if ok:
-                _telegram_send_message(int(chat_id), "✅ تم نشر الفيديو مع كابشن.")
-            else:
-                _telegram_send_message(int(chat_id), f"❌ فشل نشر الفيديو: {err}")
-            return jsonify({"ok": True})
-        except Exception as e:
-            _telegram_send_message(int(chat_id), f"❌ Error: {str(e)}")
-            return jsonify({"ok": True})
+                try:
+                    ws, header = _get_sheet()
+                    append_row(
+                        ws,
+                        header,
+                        {
+                            "Timestamp": utc_now_iso(),
+                            "Image_URL": "",
+                            "AI_Caption": caption,
+                            "Status": "Posted" if ok else "Failed",
+                            "Scheduled_Time": "",
+                            "Source": "User_Video",
+                        },
+                    )
+                except Exception:
+                    pass
+
+                if ok:
+                    _telegram_send_message(int(chat_id), "✅ تم نشر الفيديو مع كابشن.")
+                else:
+                    _telegram_send_message(int(chat_id), f"❌ فشل نشر الفيديو: {err}")
+                return jsonify({"ok": True})
+            except Exception as e:
+                _telegram_send_message(int(chat_id), f"❌ Error: {str(e)}")
+                return jsonify({"ok": True})
+
+        _PENDING_VIDEO[int(chat_id)] = {
+            "file_id": str(file_id),
+            "filename": filename,
+            "mime_type": mime_type,
+        }
+        _telegram_send_message_with_markup(
+            int(chat_id),
+            "الفيديو عن إيه؟ اختار النوع علشان أكتب كابشن مناسب:",
+            _telegram_video_category_markup(),
+        )
+        return jsonify({"ok": True})
 
     photos = message.get("photo") or []
     if not photos:

@@ -365,7 +365,7 @@ def _pollinations_url(prompt_en: str) -> str:
     encoded = urllib.parse.quote(str(prompt_en or "").strip(), safe="")
     params = urllib.parse.urlencode(
         {
-            "model": "flux",
+            "model": "anime",
             "width": 1024,
             "height": 1024,
             "nologo": "true",
@@ -378,13 +378,13 @@ def _pollinations_url(prompt_en: str) -> str:
 def _generate_image_prompt_en() -> str:
     if not client:
         return (
-            "Cinematic photo of kids martial arts training in Cairo gym,"
-            " realistic lighting, sharp focus, no text, no watermark"
+            "Anime-style illustration of kids martial arts training in Cairo gym,"
+            " vibrant colors, clean lines, soft shading, no text, no watermark"
         )
     prompt = (
-        "Write ONE short English image prompt (12-20 words) for a cinematic sports academy scene in Egypt. "
+        "Write ONE short English image prompt (12-20 words) for an anime/cartoon sports academy scene in Egypt. "
         "Mention one sport (karate, kung fu, kickboxing, gymnastics, boxing, taekwondo). "
-        "Add lighting and lens/style details (e.g., soft rim light, 35mm). "
+        "Add style details (vibrant colors, clean lines, soft shading). "
         "No text, no watermark, safe-for-work."
     )
     res = client.chat.completions.create(
@@ -405,6 +405,7 @@ def _generate_ar_caption_from_prompt(prompt_en: str) -> str:
         "تحفيز للّاعبين وأولياء الأمور، و CTA لطيف للحجز. "
         "اذكر واحدة من رياضات الأكاديمية (كاراتيه/كونغ فو/كيك بوكس/جمباز/ملاكمة/تايكوندو). "
         "إيموجيز بسيطة بدون مبالغة. "
+        "ممنوع ذكر أو ترجمة وصف الصورة الإنجليزية أو كلمة prompt. "
         f"وصف الصورة (بالإنجليزية): {prompt_en}"
     )
     res = client.chat.completions.create(
@@ -413,7 +414,7 @@ def _generate_ar_caption_from_prompt(prompt_en: str) -> str:
         max_tokens=250,
         temperature=0.85,
     )
-    return (res.choices[0].message.content or "").strip()
+    return _clean_caption_text(res.choices[0].message.content or "")
 
 
 def _next_available_slot(now_utc: datetime) -> datetime:
@@ -746,6 +747,7 @@ def _generate_caption_for_image_url(image_url: str) -> str:
         "اذكر واحدة من رياضات الأكاديمية (كاراتيه/كونغ فو/كيك بوكس/جمباز/ملاكمة/تايكوندو). "
         "إيموجيز بسيطة بدون مبالغة. "
         "لا تذكر أنك لم ترَ الصورة. "
+        "ممنوع ذكر أو ترجمة وصف الصورة الإنجليزية أو كلمة prompt. "
         f"رابط الصورة (للسياق فقط): {image_url}"
     )
     res = client.chat.completions.create(
@@ -754,7 +756,14 @@ def _generate_caption_for_image_url(image_url: str) -> str:
         max_tokens=250,
         temperature=0.85,
     )
-    return (res.choices[0].message.content or "").strip()
+    return _clean_caption_text(res.choices[0].message.content or "")
+
+
+def _clean_caption_text(text: str) -> str:
+    lines = [ln.strip() for ln in str(text or "").splitlines() if ln.strip()]
+    banned = ("prompt", "english", "description", "وصف الصورة", "image prompt")
+    filtered = [ln for ln in lines if all(b not in ln.lower() for b in banned)]
+    return "\n".join(filtered).strip() or str(text or "").strip()
 
 
 def _generate_caption_for_video() -> str:

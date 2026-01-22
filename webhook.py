@@ -351,16 +351,29 @@ def _get_sheet():
 
 def _pollinations_url(prompt_en: str) -> str:
     encoded = urllib.parse.quote(str(prompt_en or "").strip(), safe="")
-    return f"https://image.pollinations.ai/prompt/{encoded}"
+    params = urllib.parse.urlencode(
+        {
+            "model": "flux",
+            "width": 1024,
+            "height": 1024,
+            "nologo": "true",
+            "seed": random.randint(1, 10_000_000),
+        }
+    )
+    return f"https://image.pollinations.ai/prompt/{encoded}?{params}"
 
 
 def _generate_image_prompt_en() -> str:
     if not client:
-        return "Cinematic photo of kids martial arts training in Cairo, golden hour, energetic, high detail"
+        return (
+            "Cinematic photo of kids martial arts training in Cairo gym,"
+            " realistic lighting, sharp focus, no text, no watermark"
+        )
     prompt = (
-        "Write ONE short English image prompt (8-18 words) for a cinematic sports academy scene in Egypt. "
+        "Write ONE short English image prompt (12-20 words) for a cinematic sports academy scene in Egypt. "
         "Mention one sport (karate, kung fu, kickboxing, gymnastics, boxing, taekwondo). "
-        "Safe-for-work. Avoid violence and copyrighted characters."
+        "Add lighting and lens/style details (e.g., soft rim light, 35mm). "
+        "No text, no watermark, safe-for-work."
     )
     res = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
@@ -722,6 +735,23 @@ def _generate_caption_for_image_url(image_url: str) -> str:
         "إيموجيز بسيطة بدون مبالغة. "
         "لا تذكر أنك لم ترَ الصورة. "
         f"رابط الصورة (للسياق فقط): {image_url}"
+    )
+    res = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=250,
+        temperature=0.85,
+    )
+    return (res.choices[0].message.content or "").strip()
+
+
+def _generate_caption_for_video() -> str:
+    if not client:
+        return "🎥 تمرين قوي ومفيد! احجز مكانك دلوقتي 💪📞"
+    prompt = (
+        "اكتب كابشن فيسبوك عربي مصري (عامية) لفيديو تدريب رياضي في الأكاديمية. "
+        "الكابشن 3-5 سطور، نصيحة تدريب أو صحة، تحفيز للّاعبين وأولياء الأمور، "
+        "و CTA لطيف للحجز. اذكر رياضة من رياضات الأكاديمية."
     )
     res = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
@@ -1167,11 +1197,33 @@ def _post_to_facebook_page(message: str, image_url: Optional[str]) -> Tuple[bool
     try:
         url = "https://graph.facebook.com/v18.0/me/feed"
         data = {"message": message}
-        if image_url:
+        if image_url and "pollinations.ai/prompt" not in image_url:
             data["link"] = image_url
         r = requests.post(url, params=params, json=data, timeout=30)
         r.raise_for_status()
         return True, "ok"
+    except Exception as e:
+        return False, str(e)
+
+
+def _post_video_to_facebook_page(message: str, video_bytes: bytes, filename: str, mime_type: str) -> Tuple[bool, str]:
+    if not PAGE_ACCESS_TOKEN:
+        return False, "PAGE_ACCESS_TOKEN not set"
+
+    params = {"access_token": PAGE_ACCESS_TOKEN}
+    try:
+        files = {"source": (filename, video_bytes, mime_type)}
+        data = {"description": message}
+        r = requests.post(
+            "https://graph.facebook.com/v18.0/me/videos",
+            params=params,
+            data=data,
+            files=files,
+            timeout=120,
+        )
+        if r.status_code == 200:
+            return True, "ok"
+        return False, r.text
     except Exception as e:
         return False, str(e)
 
@@ -1626,6 +1678,59 @@ def telegram_webhook():
                 int(chat_id), "🔒 اكتب كلمة السر لتفعيل النشر لمدة ساعتين."
             )
         return jsonify({"ok": True})
+
+    # Handle video uploads
+    video = message.get("video")
+    doc = message.get("document") or {}
+    doc_mime = str(doc.get("mime_type") or "")
+    if video or doc_mime.startswith("video/"):
+        file_id = None
+        filename = "video.mp4"
+        mime_type = "video/mp4"
+
+        if video:
+            file_id = video.get("file_id")
+            filename = str(video.get("file_name") or "video.mp4")
+            mime_type = str(video.get("mime_type") or "video/mp4")
+        else:
+            file_id = doc.get("file_id")
+            filename = str(doc.get("file_name") or "video.mp4")
+            mime_type = str(doc.get("mime_type") or "video/mp4")
+
+        if not file_id:
+            _telegram_send_message(int(chat_id), "❌ لم أستطع قراءة الفيديو.")
+            return jsonify({"ok": True})
+
+        try:
+            video_bytes = _telegram_download_file(str(file_id))
+            caption = _generate_caption_for_video()
+            ok, err = _post_video_to_facebook_page(caption, video_bytes, filename, mime_type)
+
+            try:
+                ws, header = _get_sheet()
+                append_row(
+                    ws,
+                    header,
+                    {
+                        "Timestamp": utc_now_iso(),
+                        "Image_URL": "",
+                        "AI_Caption": caption,
+                        "Status": "Posted" if ok else "Failed",
+                        "Scheduled_Time": "",
+                        "Source": "User_Video",
+                    },
+                )
+            except Exception:
+                pass
+
+            if ok:
+                _telegram_send_message(int(chat_id), "✅ تم نشر الفيديو مع كابشن.")
+            else:
+                _telegram_send_message(int(chat_id), f"❌ فشل نشر الفيديو: {err}")
+            return jsonify({"ok": True})
+        except Exception as e:
+            _telegram_send_message(int(chat_id), f"❌ Error: {str(e)}")
+            return jsonify({"ok": True})
 
     photos = message.get("photo") or []
     if not photos:

@@ -363,15 +363,113 @@ def _telegram_send_message(chat_id: int, text: str) -> None:
         pass
 
 
+def _telegram_send_message_with_markup(chat_id: int, text: str, reply_markup: dict) -> None:
+    if not TELEGRAM_BOT_TOKEN:
+        return
+    try:
+        requests.post(
+            _telegram_api_url("sendMessage"),
+            json={"chat_id": chat_id, "text": text, "reply_markup": reply_markup},
+            timeout=15,
+        )
+    except Exception:
+        pass
+
+
+def _telegram_send_photo(chat_id: int, image_url: str, caption: str = "") -> None:
+    if not TELEGRAM_BOT_TOKEN:
+        return
+    try:
+        requests.post(
+            _telegram_api_url("sendPhoto"),
+            data={"chat_id": chat_id, "photo": image_url, "caption": caption},
+            timeout=30,
+        )
+    except Exception:
+        pass
+
+
 def _telegram_admin_help() -> str:
     return (
         "لوحة تيليجرام (أوامر الأدمن):\n"
+        "/menu - فتح لوحة التحكم\n"
         "/queue - عرض آخر 10 منشورات مجدولة\n"
         "/post <row> - نشر فوري لصف محدد\n"
         "/delete <row> - حذف صف\n"
         "/caption <row> <text> - تعديل الكابشن\n"
         "/status - حالة الطابور\n"
     )
+
+
+def _telegram_admin_menu_markup() -> dict:
+    return {
+        "inline_keyboard": [
+            [
+                {"text": "📊 الحالة", "callback_data": "dash_status"},
+                {"text": "🗂️ الطابور", "callback_data": "dash_queue"},
+            ],
+            [
+                {"text": "⚡ نشر فوري", "callback_data": "dash_post"},
+                {"text": "📝 تعديل كابشن", "callback_data": "dash_caption"},
+            ],
+            [
+                {"text": "🗑️ حذف صف", "callback_data": "dash_delete"},
+                {"text": "❓ مساعدة", "callback_data": "dash_help"},
+            ],
+        ]
+    }
+
+
+def _telegram_admin_menu(chat_id: int) -> None:
+    _telegram_send_message_with_markup(
+        chat_id,
+        "لوحة تحكم الأكاديمية ✅\nاختر من القائمة:",
+        _telegram_admin_menu_markup(),
+    )
+
+
+def _telegram_handle_admin_callback(chat_id: int, data: str) -> None:
+    if data == "dash_help":
+        _telegram_send_message(chat_id, _telegram_admin_help())
+        return
+
+    if data == "dash_status":
+        ws, _header = _get_sheet()
+        rows = list_rows(ws)
+        pending = [r for r in rows if str(r.get("Status", "")).strip().lower() == "scheduled"]
+        _telegram_send_message(chat_id, f"📊 Scheduled: {len(pending)}")
+        return
+
+    if data == "dash_queue":
+        ws, _header = _get_sheet()
+        rows = list_rows(ws)
+        pending = [r for r in rows if str(r.get("Status", "")).strip().lower() == "scheduled"]
+        pending.sort(key=lambda r: str(r.get("Scheduled_Time") or ""))
+        if not pending:
+            _telegram_send_message(chat_id, "لا توجد منشورات مجدولة حالياً.")
+            return
+        lines = []
+        for r in pending[:10]:
+            row_no = int(r.get("_row_number") or 0)
+            sched = str(r.get("Scheduled_Time") or "").strip()
+            cap = str(r.get("AI_Caption") or "").strip().replace("\n", " ")
+            if len(cap) > 60:
+                cap = cap[:57] + "..."
+            lines.append(f"#{row_no} • {sched}\n{cap}")
+        _telegram_send_message(chat_id, "\n\n".join(lines))
+        return
+
+    if data == "dash_post":
+        _telegram_send_message(chat_id, "اكتب: /post <row>")
+        return
+
+    if data == "dash_caption":
+        _telegram_send_message(chat_id, "اكتب: /caption <row> <text>")
+        return
+
+    if data == "dash_delete":
+        _telegram_send_message(chat_id, "اكتب: /delete <row>")
+        return
 
 
 def _telegram_handle_admin_command(chat_id: int, text: str) -> None:
@@ -381,6 +479,10 @@ def _telegram_handle_admin_command(chat_id: int, text: str) -> None:
 
     if cmd.startswith("/help"):
         _telegram_send_message(chat_id, _telegram_admin_help())
+        return
+
+    if cmd.startswith("/start") or cmd.startswith("/menu"):
+        _telegram_admin_menu(chat_id)
         return
 
     if cmd.startswith("/status"):
@@ -1309,6 +1411,27 @@ def telegram_webhook():
         return jsonify({"ok": False, "error": "GOOGLE_SHEET_ID not configured"}), 500
 
     update = request.get_json(silent=True) or {}
+
+    # Inline button callbacks
+    callback = update.get("callback_query") or {}
+    if callback:
+        cb_from = callback.get("from") or {}
+        cb_id = cb_from.get("id")
+        cb_message = callback.get("message") or {}
+        cb_chat = cb_message.get("chat") or {}
+        cb_chat_id = cb_chat.get("id")
+        data = str(callback.get("data") or "")
+
+        if TELEGRAM_ADMIN_ID and cb_id != TELEGRAM_ADMIN_ID:
+            return jsonify({"ok": True})
+
+        if cb_chat_id:
+            try:
+                _telegram_handle_admin_callback(int(cb_chat_id), data)
+            except Exception as e:
+                _telegram_send_message(int(cb_chat_id), f"❌ Error: {str(e)}")
+        return jsonify({"ok": True})
+
     message = update.get("message") or update.get("edited_message") or {}
     chat = message.get("chat") or {}
     chat_id = chat.get("id")

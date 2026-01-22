@@ -31,6 +31,8 @@ services:
         sync: false
       - key: TELEGRAM_WEBHOOK_SECRET
         sync: false
+      - key: TELEGRAM_PUBLISH_PASSPHRASE
+        sync: false
       - key: IMGBB_API_KEY
         sync: false
       - key: BUFFER_MINUTES

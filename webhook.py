@@ -50,6 +50,7 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_ADMIN_ID = int(os.environ.get("TELEGRAM_ADMIN_ID", "0") or "0")
 TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "").strip()
 IMGBB_API_KEY = os.environ.get("IMGBB_API_KEY", "").strip()
+TELEGRAM_PUBLISH_PASSPHRASE = os.environ.get("TELEGRAM_PUBLISH_PASSPHRASE", "بسم الله الرحمن الرحيم").strip()
 
 BUFFER_MINUTES = int(os.environ.get("BUFFER_MINUTES", "30") or "30")
 PREFILL_HOURS = int(os.environ.get("PREFILL_HOURS", "6") or "6")
@@ -63,6 +64,8 @@ else:
 _GS_CLIENT = None
 _GS_WS = None
 _GS_HEADER = None
+
+_TELEGRAM_AUTH_UNTIL: Dict[int, datetime] = {}
 
 # بسيط ومفيد ضد التخمين (in-memory). مناسب لـ Render single instance.
 _GEN_FAILS = {}
@@ -305,7 +308,8 @@ def _generate_image_prompt_en() -> str:
     if not client:
         return "Cinematic photo of kids martial arts training in Cairo, golden hour, energetic, high detail"
     prompt = (
-        "Write ONE short English image prompt (8-18 words) for a cinematic sports academy scene. "
+        "Write ONE short English image prompt (8-18 words) for a cinematic sports academy scene in Egypt. "
+        "Mention one sport (karate, kung fu, kickboxing, gymnastics, boxing, taekwondo). "
         "Safe-for-work. Avoid violence and copyrighted characters."
     )
     res = client.chat.completions.create(
@@ -321,8 +325,11 @@ def _generate_ar_caption_from_prompt(prompt_en: str) -> str:
     if not client:
         return "🥋 تدريب النهارده نار! جاهزين تبدأوا؟ احجز مكانك دلوقتي 💪📞"
     prompt = (
-        "اكتب كابشن فيسبوك عربي مصري (عامية) عن صورة تدريب في أكاديمية رياضية. "
-        "الكابشن 2-4 سطور، تحفيزي، وفيه CTA للحجز، وإيموجيز بسيطة. "
+        "اكتب كابشن فيسبوك عربي مصري (عامية) لصانع محتوى رياضي محترف. "
+        "الكابشن 3-5 سطور، معلومات مفيدة وقابلة للتطبيق، نصيحة تدريب أو صحة، "
+        "تحفيز للّاعبين وأولياء الأمور، و CTA لطيف للحجز. "
+        "اذكر واحدة من رياضات الأكاديمية (كاراتيه/كونغ فو/كيك بوكس/جمباز/ملاكمة/تايكوندو). "
+        "إيموجيز بسيطة بدون مبالغة. "
         f"وصف الصورة (بالإنجليزية): {prompt_en}"
     )
     res = client.chat.completions.create(
@@ -363,6 +370,16 @@ def _telegram_send_message(chat_id: int, text: str) -> None:
         pass
 
 
+def _telegram_is_authorized(chat_id: int) -> bool:
+    now = datetime.now(timezone.utc)
+    expires = _TELEGRAM_AUTH_UNTIL.get(chat_id)
+    return bool(expires and expires > now)
+
+
+def _telegram_authorize(chat_id: int, minutes: int = 120) -> None:
+    _TELEGRAM_AUTH_UNTIL[chat_id] = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+
+
 def _telegram_send_message_with_markup(chat_id: int, text: str, reply_markup: dict) -> None:
     if not TELEGRAM_BOT_TOKEN:
         return
@@ -393,6 +410,7 @@ def _telegram_admin_help() -> str:
     return (
         "لوحة تيليجرام (أوامر الأدمن):\n"
         "/menu - فتح لوحة التحكم\n"
+        "/auth <pass> - تفعيل النشر لمدة ساعتين\n"
         "/queue - عرض آخر 10 منشورات مجدولة\n"
         "/post <row> - نشر فوري لصف محدد\n"
         "/delete <row> - حذف صف\n"
@@ -409,6 +427,7 @@ def _telegram_admin_menu_markup() -> dict:
                 {"text": "🗂️ الطابور", "callback_data": "dash_queue"},
             ],
             [
+                {"text": "🤖 AI انشر الآن", "callback_data": "dash_ai_post"},
                 {"text": "⚡ نشر فوري", "callback_data": "dash_post"},
                 {"text": "📝 تعديل كابشن", "callback_data": "dash_caption"},
             ],
@@ -471,6 +490,35 @@ def _telegram_handle_admin_callback(chat_id: int, data: str) -> None:
         _telegram_send_message(chat_id, "اكتب: /delete <row>")
         return
 
+    if data == "dash_ai_post":
+        prompt_en = _generate_image_prompt_en()
+        img_url = _pollinations_url(prompt_en)
+        caption_ar = _generate_ar_caption_from_prompt(prompt_en)
+        ok, err = _post_to_facebook_page(caption_ar, img_url)
+
+        try:
+            ws, header = _get_sheet()
+            append_row(
+                ws,
+                header,
+                {
+                    "Timestamp": utc_now_iso(),
+                    "Image_URL": img_url,
+                    "AI_Caption": caption_ar,
+                    "Status": "Posted" if ok else "Failed",
+                    "Scheduled_Time": "",
+                    "Source": "AI_Generated",
+                },
+            )
+        except Exception:
+            pass
+
+        if ok:
+            _telegram_send_message(chat_id, "✅ تم نشر محتوى وصورة AI الآن")
+        else:
+            _telegram_send_message(chat_id, f"❌ فشل النشر: {err}")
+        return
+
 
 def _telegram_handle_admin_command(chat_id: int, text: str) -> None:
     cmd = (text or "").strip()
@@ -483,6 +531,15 @@ def _telegram_handle_admin_command(chat_id: int, text: str) -> None:
 
     if cmd.startswith("/start") or cmd.startswith("/menu"):
         _telegram_admin_menu(chat_id)
+        return
+
+    if cmd.startswith("/auth "):
+        phrase = cmd.split(" ", 1)[1].strip()
+        if phrase == TELEGRAM_PUBLISH_PASSPHRASE:
+            _telegram_authorize(chat_id)
+            _telegram_send_message(chat_id, "✅ تم التفعيل لمدة ساعتين.")
+        else:
+            _telegram_send_message(chat_id, "❌ كلمة السر غير صحيحة.")
         return
 
     if cmd.startswith("/status"):
@@ -591,8 +648,11 @@ def _generate_caption_for_image_url(image_url: str) -> str:
     if not client:
         return "🥋 جاهزين للتمرين؟ احجز مكانك دلوقتي! 📞"
     prompt = (
-        "اكتب كابشن فيسبوك عربي مصري (عامية) عن صورة تدريب في أكاديمية رياضية. "
-        "الكابشن 2-4 سطور، تحفيزي، وفيه CTA للحجز، وإيموجيز مناسبة. "
+        "اكتب كابشن فيسبوك عربي مصري (عامية) لصانع محتوى رياضي محترف. "
+        "الكابشن 3-5 سطور، معلومات مفيدة قابلة للتطبيق، نصيحة تدريب أو صحة، "
+        "تحفيز للّاعبين وأولياء الأمور، و CTA لطيف للحجز. "
+        "اذكر واحدة من رياضات الأكاديمية (كاراتيه/كونغ فو/كيك بوكس/جمباز/ملاكمة/تايكوندو). "
+        "إيموجيز بسيطة بدون مبالغة. "
         "لا تذكر أنك لم ترَ الصورة. "
         f"رابط الصورة (للسياق فقط): {image_url}"
     )
@@ -837,8 +897,15 @@ def get_mood_prompt(mood):
         )
 
 
-SYSTEM_PROMPT_BASE = """أنت "كابتن عز غريب"، صانع محتوى رياضي ومدرب خبير.
-الهدف: تقديم قيمة حقيقية، تحفيز الناس، والتسويق للأكاديمية بذكاء.
+SYSTEM_PROMPT_BASE = """أنت "كابتن عز غريب"، صانع محتوى رياضي ودفاع عن النفس محترف.
+هدفك: تقديم قيمة حقيقية، معلومات عملية قابلة للتطبيق، وتحفيز اللاعبين وأولياء الأمور.
+
+إرشادات أسلوبية:
+- قدّم نصائح واقعية ومختصرة عن اللياقة، المرونة، القوة، التغذية البسيطة، السلامة.
+- ركّز على رياضات الأكاديمية: كاراتيه، كونغ فو، كيك بوكسينج، جمباز، ملاكمة، تايكوندو.
+- أضف نقاط تعليمية عن الدفاع عن النفس والانضباط والثقة.
+- اختم بنداء لطيف للحجز أو التواصل (CTA) دون مبالغة.
+- خاطب الجميع بلغة عربية مصرية سهلة ومهذبة.
 """
 
 
@@ -1451,10 +1518,43 @@ def telegram_webhook():
             _telegram_send_message(int(chat_id), f"❌ Error: {str(e)}")
         return jsonify({"ok": True})
 
+    # Passphrase gate for uploads/content
+    if text and TELEGRAM_PUBLISH_PASSPHRASE and text.strip() == TELEGRAM_PUBLISH_PASSPHRASE:
+        _telegram_authorize(int(chat_id))
+        _telegram_send_message(int(chat_id), "✅ تم التفعيل لمدة ساعتين. ابعت المحتوى الآن.")
+        return jsonify({"ok": True})
+
+    if not _telegram_is_authorized(int(chat_id)):
+        if chat_id:
+            _telegram_send_message(int(chat_id), "🔒 اكتب كلمة السر لتفعيل النشر لمدة ساعتين.")
+        return jsonify({"ok": True})
+
     photos = message.get("photo") or []
     if not photos:
         if chat_id:
-            _telegram_send_message(int(chat_id), "ابعت صورة فقط أو اكتب /help للأوامر.")
+            # Allow text-only content scheduling
+            if text and not text.startswith("/"):
+                now = datetime.now(timezone.utc).replace(microsecond=0)
+                scheduled_time = now + timedelta(minutes=max(BUFFER_MINUTES, 0))
+                ws, header = _get_sheet()
+                append_row(
+                    ws,
+                    header,
+                    {
+                        "Timestamp": utc_now_iso(),
+                        "Image_URL": "",
+                        "AI_Caption": text,
+                        "Status": "Scheduled",
+                        "Scheduled_Time": scheduled_time.isoformat(),
+                        "Source": "User_Text",
+                    },
+                )
+                _telegram_send_message(
+                    int(chat_id),
+                    f"✅ تم حفظ المحتوى. موعد النشر: {scheduled_time.isoformat()}",
+                )
+            else:
+                _telegram_send_message(int(chat_id), "ابعت صورة أو محتوى نصي.")
         return jsonify({"ok": True})
 
     best = photos[-1]

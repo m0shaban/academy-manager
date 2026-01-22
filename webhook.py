@@ -38,19 +38,31 @@ CRON_SECRET = os.environ.get("CRON_SECRET", "").strip()
 ADMIN_TOKEN = os.environ.get("ADMIN_TOKEN")  # حماية احترافية لتوليد الأكواد (Header)
 
 # Facebook reply toggles
-FB_REPLY_COMMENTS = os.environ.get("FB_REPLY_COMMENTS", "1").strip().lower() in {"1", "true", "yes"}
-FB_REPLY_MESSAGES = os.environ.get("FB_REPLY_MESSAGES", "1").strip().lower() in {"1", "true", "yes"}
+FB_REPLY_COMMENTS = os.environ.get("FB_REPLY_COMMENTS", "1").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+}
+FB_REPLY_MESSAGES = os.environ.get("FB_REPLY_MESSAGES", "1").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+}
 
 # Google Sheets CMS
 GOOGLE_SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "").strip()
-GOOGLE_SHEET_WORKSHEET = os.environ.get("GOOGLE_SHEET_WORKSHEET", "Buffer").strip() or "Buffer"
+GOOGLE_SHEET_WORKSHEET = (
+    os.environ.get("GOOGLE_SHEET_WORKSHEET", "Buffer").strip() or "Buffer"
+)
 
 # Telegram Webhook Uploader (single web server)
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
 TELEGRAM_ADMIN_ID = int(os.environ.get("TELEGRAM_ADMIN_ID", "0") or "0")
 TELEGRAM_WEBHOOK_SECRET = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "").strip()
 IMGBB_API_KEY = os.environ.get("IMGBB_API_KEY", "").strip()
-TELEGRAM_PUBLISH_PASSPHRASE = os.environ.get("TELEGRAM_PUBLISH_PASSPHRASE", "بسم الله الرحمن الرحيم").strip()
+TELEGRAM_PUBLISH_PASSPHRASE = os.environ.get(
+    "TELEGRAM_PUBLISH_PASSPHRASE", "بسم الله الرحمن الرحيم"
+).strip()
 
 BUFFER_MINUTES = int(os.environ.get("BUFFER_MINUTES", "30") or "30")
 PREFILL_HOURS = int(os.environ.get("PREFILL_HOURS", "6") or "6")
@@ -201,25 +213,57 @@ def self_test():
     _add("env.CRON_SECRET", bool(CRON_SECRET), "set" if CRON_SECRET else "missing")
     _add("env.VERIFY_TOKEN", bool(VERIFY_TOKEN), "set" if VERIFY_TOKEN else "missing")
     _add("env.GROQ_API_KEY_4", bool(GROQ_API_KEY), "set" if GROQ_API_KEY else "missing")
-    _add("env.PAGE_ACCESS_TOKEN", bool(PAGE_ACCESS_TOKEN), "set" if PAGE_ACCESS_TOKEN else "missing")
-    _add("env.GOOGLE_SHEET_ID", bool(GOOGLE_SHEET_ID), "set" if GOOGLE_SHEET_ID else "missing")
+    _add(
+        "env.PAGE_ACCESS_TOKEN",
+        bool(PAGE_ACCESS_TOKEN),
+        "set" if PAGE_ACCESS_TOKEN else "missing",
+    )
+    _add(
+        "env.GOOGLE_SHEET_ID",
+        bool(GOOGLE_SHEET_ID),
+        "set" if GOOGLE_SHEET_ID else "missing",
+    )
     _add(
         "env.GOOGLE_SERVICE_ACCOUNT",
-        bool(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE")),
-        "set" if (os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE")) else "missing",
+        bool(
+            os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+            or os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE")
+        ),
+        (
+            "set"
+            if (
+                os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+                or os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE")
+            )
+            else "missing"
+        ),
     )
     if os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE"):
         fp = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE", "")
-        _add("file.GOOGLE_SERVICE_ACCOUNT_FILE", os.path.exists(fp), "exists" if os.path.exists(fp) else "missing")
+        _add(
+            "file.GOOGLE_SERVICE_ACCOUNT_FILE",
+            os.path.exists(fp),
+            "exists" if os.path.exists(fp) else "missing",
+        )
 
-    _add("env.TELEGRAM_BOT_TOKEN", bool(TELEGRAM_BOT_TOKEN), "set" if TELEGRAM_BOT_TOKEN else "missing")
-    _add("env.TELEGRAM_ADMIN_ID", bool(TELEGRAM_ADMIN_ID), "set" if TELEGRAM_ADMIN_ID else "missing")
+    _add(
+        "env.TELEGRAM_BOT_TOKEN",
+        bool(TELEGRAM_BOT_TOKEN),
+        "set" if TELEGRAM_BOT_TOKEN else "missing",
+    )
+    _add(
+        "env.TELEGRAM_ADMIN_ID",
+        bool(TELEGRAM_ADMIN_ID),
+        "set" if TELEGRAM_ADMIN_ID else "missing",
+    )
     _add(
         "env.TELEGRAM_WEBHOOK_SECRET",
         bool(TELEGRAM_WEBHOOK_SECRET),
         "set" if TELEGRAM_WEBHOOK_SECRET else "missing",
     )
-    _add("env.IMGBB_API_KEY", bool(IMGBB_API_KEY), "set" if IMGBB_API_KEY else "missing")
+    _add(
+        "env.IMGBB_API_KEY", bool(IMGBB_API_KEY), "set" if IMGBB_API_KEY else "missing"
+    )
 
     # --- Google Sheets connectivity (read/ensure headers only) ---
     try:
@@ -238,11 +282,17 @@ def self_test():
         if TELEGRAM_BOT_TOKEN:
             r = requests.get(_telegram_api_url("getMe"), timeout=15)
             data = r.json() if r.content else {}
-            _add("telegram.getMe", bool(data.get("ok")), "ok" if data.get("ok") else str(data))
+            _add(
+                "telegram.getMe",
+                bool(data.get("ok")),
+                "ok" if data.get("ok") else str(data),
+            )
 
             r2 = requests.get(_telegram_api_url("getWebhookInfo"), timeout=15)
             info = r2.json() if r2.content else {}
-            url = ((info.get("result") or {}) if isinstance(info, dict) else {}).get("url")
+            url = ((info.get("result") or {}) if isinstance(info, dict) else {}).get(
+                "url"
+            )
             if info.get("ok") and url:
                 _add("telegram.webhookInfo", True, str(url))
             else:
@@ -377,10 +427,14 @@ def _telegram_is_authorized(chat_id: int) -> bool:
 
 
 def _telegram_authorize(chat_id: int, minutes: int = 120) -> None:
-    _TELEGRAM_AUTH_UNTIL[chat_id] = datetime.now(timezone.utc) + timedelta(minutes=minutes)
+    _TELEGRAM_AUTH_UNTIL[chat_id] = datetime.now(timezone.utc) + timedelta(
+        minutes=minutes
+    )
 
 
-def _telegram_send_message_with_markup(chat_id: int, text: str, reply_markup: dict) -> None:
+def _telegram_send_message_with_markup(
+    chat_id: int, text: str, reply_markup: dict
+) -> None:
     if not TELEGRAM_BOT_TOKEN:
         return
     try:
@@ -455,14 +509,18 @@ def _telegram_handle_admin_callback(chat_id: int, data: str) -> None:
     if data == "dash_status":
         ws, _header = _get_sheet()
         rows = list_rows(ws)
-        pending = [r for r in rows if str(r.get("Status", "")).strip().lower() == "scheduled"]
+        pending = [
+            r for r in rows if str(r.get("Status", "")).strip().lower() == "scheduled"
+        ]
         _telegram_send_message(chat_id, f"📊 Scheduled: {len(pending)}")
         return
 
     if data == "dash_queue":
         ws, _header = _get_sheet()
         rows = list_rows(ws)
-        pending = [r for r in rows if str(r.get("Status", "")).strip().lower() == "scheduled"]
+        pending = [
+            r for r in rows if str(r.get("Status", "")).strip().lower() == "scheduled"
+        ]
         pending.sort(key=lambda r: str(r.get("Scheduled_Time") or ""))
         if not pending:
             _telegram_send_message(chat_id, "لا توجد منشورات مجدولة حالياً.")
@@ -545,14 +603,18 @@ def _telegram_handle_admin_command(chat_id: int, text: str) -> None:
     if cmd.startswith("/status"):
         ws, _header = _get_sheet()
         rows = list_rows(ws)
-        pending = [r for r in rows if str(r.get("Status", "")).strip().lower() == "scheduled"]
+        pending = [
+            r for r in rows if str(r.get("Status", "")).strip().lower() == "scheduled"
+        ]
         _telegram_send_message(chat_id, f"Scheduled: {len(pending)}")
         return
 
     if cmd.startswith("/queue"):
         ws, _header = _get_sheet()
         rows = list_rows(ws)
-        pending = [r for r in rows if str(r.get("Status", "")).strip().lower() == "scheduled"]
+        pending = [
+            r for r in rows if str(r.get("Status", "")).strip().lower() == "scheduled"
+        ]
         pending.sort(key=lambda r: str(r.get("Scheduled_Time") or ""))
         if not pending:
             _telegram_send_message(chat_id, "لا توجد منشورات مجدولة حالياً.")
@@ -576,7 +638,10 @@ def _telegram_handle_admin_command(chat_id: int, text: str) -> None:
         row_number = int(parts[1].strip())
         ws, header = _get_sheet()
         values = ws.row_values(row_number)
-        item = {header[i]: (values[i] if i < len(values) else "") for i in range(len(header))}
+        item = {
+            header[i]: (values[i] if i < len(values) else "")
+            for i in range(len(header))
+        }
         caption = str(item.get("AI_Caption") or "").strip()
         image_url = str(item.get("Image_URL") or "").strip() or None
         ok, err = _post_to_facebook_page(caption, image_url)
@@ -615,7 +680,9 @@ def _telegram_handle_admin_command(chat_id: int, text: str) -> None:
 
 
 def _telegram_download_file(file_id: str) -> bytes:
-    r = requests.get(_telegram_api_url("getFile"), params={"file_id": file_id}, timeout=20)
+    r = requests.get(
+        _telegram_api_url("getFile"), params={"file_id": file_id}, timeout=20
+    )
     payload = r.json() if r.content else {}
     if not payload.get("ok"):
         raise RuntimeError("Telegram getFile failed")
@@ -1405,10 +1472,17 @@ def publisher_tick():
     if secret != CRON_SECRET:
         return "Unauthorized", 401
 
-    dry_run = str(request.args.get("dry_run", "")).strip().lower() in {"1", "true", "yes"}
+    dry_run = str(request.args.get("dry_run", "")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
 
     if not GOOGLE_SHEET_ID:
-        return jsonify({"enabled": False, "error": "GOOGLE_SHEET_ID not configured"}), 200
+        return (
+            jsonify({"enabled": False, "error": "GOOGLE_SHEET_ID not configured"}),
+            200,
+        )
 
     try:
         ws, header = _get_sheet()
@@ -1424,15 +1498,30 @@ def publisher_tick():
 
             if dry_run:
                 update_fields(ws, row_number, header, {"Status": "Posted"})
-                return jsonify({"enabled": True, "action": "dry_run_posted", "row": row_number}), 200
+                return (
+                    jsonify(
+                        {"enabled": True, "action": "dry_run_posted", "row": row_number}
+                    ),
+                    200,
+                )
 
             ok, err = _post_to_facebook_page(caption, image_url)
             if ok:
                 update_fields(ws, row_number, header, {"Status": "Posted"})
-                return jsonify({"enabled": True, "action": "posted", "row": row_number}), 200
+                return (
+                    jsonify({"enabled": True, "action": "posted", "row": row_number}),
+                    200,
+                )
             update_fields(ws, row_number, header, {"Status": "Failed"})
             return (
-                jsonify({"enabled": True, "action": "failed", "row": row_number, "error": err}),
+                jsonify(
+                    {
+                        "enabled": True,
+                        "action": "failed",
+                        "row": row_number,
+                        "error": err,
+                    }
+                ),
                 200,
             )
 
@@ -1505,28 +1594,37 @@ def telegram_webhook():
     from_user = message.get("from") or {}
     from_id = from_user.get("id")
 
-    if TELEGRAM_ADMIN_ID and from_id != TELEGRAM_ADMIN_ID:
-        if chat_id:
-            _telegram_send_message(int(chat_id), "غير مسموح. هذا البوت للأدمن فقط.")
+    text = str(message.get("text") or "").strip()
+
+    # Passphrase gate for uploads/content (available to any user)
+    if text and TELEGRAM_PUBLISH_PASSPHRASE and text.strip() == TELEGRAM_PUBLISH_PASSPHRASE:
+        _telegram_authorize(int(chat_id))
+        _telegram_send_message(
+            int(chat_id), "✅ تم التفعيل لمدة ساعتين. ابعت المحتوى الآن."
+        )
         return jsonify({"ok": True})
 
-    text = str(message.get("text") or "").strip()
-    if text and TELEGRAM_ADMIN_ID and from_id == TELEGRAM_ADMIN_ID:
+    # Admin-only commands/menu
+    if text and text.startswith("/"):
+        if TELEGRAM_ADMIN_ID and from_id != TELEGRAM_ADMIN_ID:
+            if chat_id:
+                _telegram_send_message(
+                    int(chat_id),
+                    "الأوامر للأدمن فقط. لو هتنشر محتوى اكتب كلمة السر أولاً.",
+                )
+            return jsonify({"ok": True})
+
         try:
             _telegram_handle_admin_command(int(chat_id), text)
         except Exception as e:
             _telegram_send_message(int(chat_id), f"❌ Error: {str(e)}")
         return jsonify({"ok": True})
 
-    # Passphrase gate for uploads/content
-    if text and TELEGRAM_PUBLISH_PASSPHRASE and text.strip() == TELEGRAM_PUBLISH_PASSPHRASE:
-        _telegram_authorize(int(chat_id))
-        _telegram_send_message(int(chat_id), "✅ تم التفعيل لمدة ساعتين. ابعت المحتوى الآن.")
-        return jsonify({"ok": True})
-
     if not _telegram_is_authorized(int(chat_id)):
         if chat_id:
-            _telegram_send_message(int(chat_id), "🔒 اكتب كلمة السر لتفعيل النشر لمدة ساعتين.")
+            _telegram_send_message(
+                int(chat_id), "🔒 اكتب كلمة السر لتفعيل النشر لمدة ساعتين."
+            )
         return jsonify({"ok": True})
 
     photos = message.get("photo") or []
@@ -1604,7 +1702,9 @@ def cms_pending():
 
     ws, _header = _get_sheet()
     rows = list_rows(ws)
-    pending = [r for r in rows if str(r.get("Status", "")).strip().lower() == "scheduled"]
+    pending = [
+        r for r in rows if str(r.get("Status", "")).strip().lower() == "scheduled"
+    ]
     pending.sort(key=lambda r: str(r.get("Scheduled_Time") or ""))
     return jsonify({"items": pending}), 200
 
@@ -1640,7 +1740,9 @@ def cms_post_now():
     ws, header = _get_sheet()
     # Read row
     values = ws.row_values(row_number)
-    item = {header[i]: (values[i] if i < len(values) else "") for i in range(len(header))}
+    item = {
+        header[i]: (values[i] if i < len(values) else "") for i in range(len(header))
+    }
     caption = str(item.get("AI_Caption") or "").strip()
     image_url = str(item.get("Image_URL") or "").strip() or None
     ok, err = _post_to_facebook_page(caption, image_url)
